@@ -20,6 +20,8 @@ from datetime import datetime
 
 import swisseph as swe
 
+from utils import dt_to_jd, jd_to_local, dms
+
 # ephe/ лежит рядом со скриптом; SE_EPHE_PATH переопределяет если нужно
 EPHE_PATH = os.environ.get(
     "SE_EPHE_PATH",
@@ -120,20 +122,18 @@ BOUNDARY_WARN = 0.25
 #  УТИЛИТЫ
 # ═══════════════════════════════════════════════════════════
 
-def r(deg): return math.radians(deg % 360)
+def to_jd(dt: datetime, tz: float) -> float:
+    """Local datetime + timezone → Julian Day (UTC)."""
+    return dt_to_jd(dt) - tz / 24
 
-def dms(degrees):
-    """Полная эклиптическая долгота 0-359° -> ДД°ММ'СС\" без округлений."""
-    degrees = degrees % 360
-    total_sec = round(degrees * 3600)
-    s = total_sec % 60
-    total_min = total_sec // 60
-    m = total_min % 60
-    d = total_min // 60
-    return f"{d}\u00b0{m:02d}'{s:02d}\""
 
-def dms_sign(deg_in_sign):
-    """Градус внутри знака 0-29° -> Д°ММ'СС\" (формат JHora/Kala/Parashara)."""
+def lon_to_sign(lon: float):
+    lon = lon % 360
+    return int(lon / 30) + 1, lon % 30
+
+
+def dms_sign(deg_in_sign: float) -> str:
+    """Градус внутри знака 0-29° → Д°ММ'СС\" (формат JHora/Kala/Parashara)."""
     total_sec = round(deg_in_sign * 3600)
     s = total_sec % 60
     total_min = total_sec // 60
@@ -141,23 +141,11 @@ def dms_sign(deg_in_sign):
     d = total_min // 60
     return f"{d}\u00b0{m:02d}'{s:02d}\""
 
-def lon_to_sign(lon):
-    lon = lon % 360
-    return int(lon / 30) + 1, lon % 30
-
-def to_jd(dt, tz):
-    hu = dt.hour + dt.minute / 60.0 - tz
-    y, m = dt.year, dt.month
-    d = dt.day + hu / 24.0
-    if m <= 2: y -= 1; m += 12
-    A = int(y / 100); B = 2 - A + int(A / 4)
-    return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + B - 1524.5
-
 # ═══════════════════════════════════════════════════════════
 #  АЯНАМША
 # ═══════════════════════════════════════════════════════════
 
-def get_aya(jd, mode=None):
+def get_aya(jd: float, mode=None) -> float:
     swe.set_sid_mode(mode if mode is not None else swe.SIDM_LAHIRI)
     return swe.get_ayanamsa_ut(jd)   # _ut принимает UT напрямую, без ΔT
 
@@ -165,7 +153,7 @@ def get_aya(jd, mode=None):
 #  ЛУНА (тропическая, геоцентр / топоцентр)
 # ═══════════════════════════════════════════════════════════
 
-def moon_trop(jd, topo=False, lat=0, lon=0):
+def moon_trop(jd: float, topo: bool = False, lat: float = 0, lon: float = 0) -> float:
     fl = swe.FLG_SWIEPH
     if topo:
         swe.set_topo(lon, lat, 0)
@@ -177,7 +165,7 @@ def moon_trop(jd, topo=False, lat=0, lon=0):
 #  ПЛАНЕТЫ
 # ═══════════════════════════════════════════════════════════
 
-def _planet_trop_swe(jd, planet_idx):
+def _planet_trop_swe(jd: float, planet_idx: int) -> float:
     """Тропическая долгота планеты через SWE.
 
     Раху/Кету: используем TRUE_NODE (истинный узел).
@@ -192,9 +180,9 @@ def _planet_trop_swe(jd, planet_idx):
         lon = (lon + 180.0) % 360
     return lon
 
-def get_planet_positions(jd, aya):
-    """
-    Возвращает список планет с тропическими/сидерическими координатами,
+
+def get_planet_positions(jd: float, aya: float) -> list:
+    """Возвращает список планет с тропическими/сидерическими координатами,
     накшатрой, падой и знаком.
     """
     result = []
@@ -231,7 +219,7 @@ def get_planet_positions(jd, aya):
 #  НАКШАТРА
 # ═══════════════════════════════════════════════════════════
 
-def get_nk(sid):
+def get_nk(sid: float) -> dict:
     idx  = int(sid / NK_SIZE) % 27
     pada = int((sid % NK_SIZE) / (NK_SIZE / 4)) + 1
     deg  = sid % NK_SIZE
@@ -243,7 +231,7 @@ def get_nk(sid):
 #  ДИАГНОСТИКА ГРАНИЦЫ
 # ═══════════════════════════════════════════════════════════
 
-def check_boundary(jd, trop, aya, lat, lon):
+def check_boundary(jd: float, trop: float, aya: float, lat: float, lon: float) -> dict:
     sid  = (trop - aya) % 360
     pos  = sid % NK_SIZE
     dist = min(pos, NK_SIZE - pos)
@@ -278,7 +266,7 @@ def check_boundary(jd, trop, aya, lat, lon):
 #  ЛАГНА И ДОМА
 # ═══════════════════════════════════════════════════════════
 
-def get_lagna(jd, lat, lon, aya):
+def get_lagna(jd: float, lat: float, lon: float, aya: float) -> dict:
     _, ascmc = swe.houses(jd, lat, lon, b'W')
     trop = ascmc[0]
     sid = (trop - aya) % 360
@@ -318,8 +306,8 @@ def calculate(year, month, day, hour, minute, tz, lat, lon):
     sid  = (trop - aya) % 360
     nk   = get_nk(sid)
 
-    lg   = get_lagna(jd, lat, lon, aya)
-    bd   = check_boundary(jd, trop, aya, lat, lon)
+    lg      = get_lagna(jd, lat, lon, aya)
+    bd      = check_boundary(jd, trop, aya, lat, lon)
     planets = get_planet_positions(jd, aya)
 
     # Определяем дом для каждой планеты (Whole Sign)
