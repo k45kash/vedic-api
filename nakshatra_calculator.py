@@ -217,8 +217,7 @@ EPH_NOTE = {
 
 def get_aya(jd, mode=None):
     if USE_SWISSEPH:
-        if mode is not None:
-            swe.set_sid_mode(mode)       # явная смена — только для сравнения аянамш
+        swe.set_sid_mode(mode if mode is not None else swe.SIDM_LAHIRI)
         return swe.get_ayanamsa_ut(jd)   # _ut принимает UT напрямую, без ΔT
     # Meeus fallback — ИСПРАВЛЕНО: эпоха J2000 (2451545.0), не B1900
     # Значение 23.85° соответствует J2000.0, а не B1900.0
