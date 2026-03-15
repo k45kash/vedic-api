@@ -20,7 +20,7 @@ from datetime import datetime, date
 
 import swisseph as swe
 
-from utils import dt_to_jd, jd_to_local, _bisect, dms
+from utils import dt_to_jd, jd_to_local, _bisect, dms, NAKSHATRAS
 
 EPHE_PATH = os.environ.get(
     "SE_EPHE_PATH",
@@ -32,36 +32,6 @@ swe.set_sid_mode(swe.SIDM_LAHIRI)   # начальный режим; get_ayanams
 # ═══════════════════════════════════════════════════════════
 #  СПРАВОЧНИК НАКШАТР
 # ═══════════════════════════════════════════════════════════
-
-NAKSHATRAS = [
-    {"num":1,  "name":"Ashwini",        "ru":"Ашвини",          "lord":"Кету",     "gana":"Devata"},
-    {"num":2,  "name":"Bharani",        "ru":"Бхарани",         "lord":"Венера",   "gana":"Manushya"},
-    {"num":3,  "name":"Krittika",       "ru":"Криттика",        "lord":"Солнце",   "gana":"Rakshasa"},
-    {"num":4,  "name":"Rohini",         "ru":"Рохини",          "lord":"Луна",     "gana":"Manushya"},
-    {"num":5,  "name":"Mrigashira",     "ru":"Мригашира",       "lord":"Марс",     "gana":"Devata"},
-    {"num":6,  "name":"Ardra",          "ru":"Ардра",           "lord":"Раху",     "gana":"Manushya"},
-    {"num":7,  "name":"Punarvasu",      "ru":"Пунарвасу",       "lord":"Юпитер",   "gana":"Devata"},
-    {"num":8,  "name":"Pushya",         "ru":"Пушья",           "lord":"Сатурн",   "gana":"Devata"},
-    {"num":9,  "name":"Ashlesha",       "ru":"Ашлеша",          "lord":"Меркурий", "gana":"Rakshasa"},
-    {"num":10, "name":"Magha",          "ru":"Магха",           "lord":"Кету",     "gana":"Rakshasa"},
-    {"num":11, "name":"Purvaphalguni",  "ru":"Пурва Пхалгуни",  "lord":"Венера",   "gana":"Manushya"},
-    {"num":12, "name":"Uttaraphalguni", "ru":"Уттара Пхалгуни", "lord":"Солнце",   "gana":"Manushya"},
-    {"num":13, "name":"Hasta",          "ru":"Хаста",           "lord":"Луна",     "gana":"Devata"},
-    {"num":14, "name":"Chitra",         "ru":"Читра",           "lord":"Марс",     "gana":"Rakshasa"},
-    {"num":15, "name":"Swati",          "ru":"Свати",           "lord":"Раху",     "gana":"Devata"},
-    {"num":16, "name":"Vishakha",       "ru":"Вишакха",         "lord":"Юпитер",   "gana":"Rakshasa"},
-    {"num":17, "name":"Anuradha",       "ru":"Анурадха",        "lord":"Сатурн",   "gana":"Devata"},
-    {"num":18, "name":"Jyeshtha",       "ru":"Джьештха",        "lord":"Меркурий", "gana":"Rakshasa"},
-    {"num":19, "name":"Mula",           "ru":"Мула",            "lord":"Кету",     "gana":"Rakshasa"},
-    {"num":20, "name":"Purvashadha",    "ru":"Пурвашадха",      "lord":"Венера",   "gana":"Manushya"},
-    {"num":21, "name":"Uttarashadha",   "ru":"Уттарашадха",     "lord":"Солнце",   "gana":"Manushya"},
-    {"num":22, "name":"Shravana",       "ru":"Шравана",         "lord":"Луна",     "gana":"Devata"},
-    {"num":23, "name":"Dhanishtha",     "ru":"Дхаништха",       "lord":"Марс",     "gana":"Rakshasa"},
-    {"num":24, "name":"Shatabhisha",    "ru":"Шатабхиша",       "lord":"Раху",     "gana":"Rakshasa"},
-    {"num":25, "name":"Purvabhadra",    "ru":"Пурвабхадра",     "lord":"Юпитер",   "gana":"Manushya"},
-    {"num":26, "name":"Uttarabhadra",   "ru":"Уттарабхадра",    "lord":"Сатурн",   "gana":"Devata"},
-    {"num":27, "name":"Revati",         "ru":"Ревати",          "lord":"Меркурий", "gana":"Devata"},
-]
 
 NK_SIZE   = 360.0 / 27      # 13.3333…°
 PADA_SIZE = NK_SIZE / 4     #  3.3333…°
@@ -231,58 +201,19 @@ def calc_calendar(
 #  ВЫВОД
 # ═══════════════════════════════════════════════════════════
 
-def _header(date_start, date_end, tz, lat, lon, title, W):
+def print_calendar(entries: list, date_start: date, date_end: date,
+                   tz: float, lat: float, lon: float):
+    """Накшатры + пады с временем и позицией Луны."""
+    W = 68
     tz_str   = f"UTC{'+' if tz >= 0 else ''}{tz:g}"
     topo_str = "топоцентр" if (lat != 0.0 or lon != 0.0) else "геоцентр"
     print("\n" + "═" * W)
-    print(f"  {title}")
+    print("  КАЛЕНДАРЬ НАКШАТР ЛУНЫ")
     print("═" * W)
     print(f"  Период  : {date_start.strftime('%d.%m.%Y')} — {date_end.strftime('%d.%m.%Y')}")
     print(f"  Часовой : {tz_str}  |  lat {lat}°  lon {lon}°")
     print(f"  Метод   : Swiss Ephemeris (DE431, ~0.001\")")
     print(f"  Позиция : {topo_str}  |  Аянамша: Лахири  |  Точность: ±1 сек")
-
-
-def print_calendar_compact(entries: list, date_start: date, date_end: date,
-                            tz: float, lat: float, lon: float):
-    """Краткий режим: только накшатры — дата начала/конца, длительность, владелец."""
-    W = 72
-    _header(date_start, date_end, tz, lat, lon, "КАЛЕНДАРЬ НАКШАТР ЛУНЫ", W)
-    print()
-    print(f"  {'Начало':<22}{'Конец':<22}{'Накшатра':<22}{'Длит.':<10}Владелец")
-    print("  " + "─" * (W - 2))
-
-    prev_day = None
-    for e in entries:
-        day_s = e["dt_start"].strftime("%d.%m.%Y")
-        if day_s != prev_day:
-            if prev_day is not None:
-                print()
-            print(f"  ── {day_s}")
-            prev_day = day_s
-
-        ref  = e["dt_start"].date()
-        ts   = e["dt_start"].strftime("%d.%m.%Y %H:%M:%S")
-        same = e["dt_end"].date() == ref
-        te   = e["dt_end"].strftime("%H:%M:%S") if same \
-               else e["dt_end"].strftime("%d.%m.%Y %H:%M:%S")
-
-        nk_str = f"#{e['nk_num']:02d} {e['ru']}"
-        dur    = fmt_duration(e["duration_h"])
-        print(f"  {ts:<22}{te:<22}{nk_str:<22}{dur:<10}{e['lord']}")
-
-    total_days = (date_end - date_start).days + 1
-    print()
-    print(f"  {'─' * (W - 4)}")
-    print(f"  Итого накшатр: {len(entries)}  |  Дней в периоде: {total_days}")
-    print("═" * W + "\n")
-
-
-def print_calendar(entries: list, date_start: date, date_end: date,
-                   tz: float, lat: float, lon: float):
-    """Расширенный режим: накшатры + пады с временем и позицией Луны."""
-    W = 68
-    _header(date_start, date_end, tz, lat, lon, "КАЛЕНДАРЬ НАКШАТР ЛУНЫ — расширенный", W)
     print()
 
     prev_day = None
@@ -352,10 +283,7 @@ def get_input():
     tz   = ask("  Часовой пояс UTC+?: ", float,  "например: 3 или 5.5")
     lat  = ask("  Широта:  ", float, "например: 55.75")
     lon  = ask("  Долгота: ", float, "например: 37.62")
-    mode = ask("  Режим [1=краткий, 2=расширенный]: ",
-               lambda s: int(s) if s in ("1", "2") else (_ for _ in ()).throw(ValueError()),
-               "введите 1 или 2")
-    return d_s, d_e, tz, lat, lon, mode
+    return d_s, d_e, tz, lat, lon
 
 # ═══════════════════════════════════════════════════════════
 #  ПРИМЕРЫ
@@ -386,7 +314,6 @@ if __name__ == "__main__":
             for ex in EXAMPLES:
                 print(f"\n  Пример: {ex['name']}")
                 entries = calc_calendar(ex["start"], ex["end"], ex["tz"], ex["lat"], ex["lon"])
-                print_calendar_compact(entries, ex["start"], ex["end"], ex["tz"], ex["lat"], ex["lon"])
                 print_calendar(entries, ex["start"], ex["end"], ex["tz"], ex["lat"], ex["lon"])
 
         elif cmd == "--period" and len(sys.argv) >= 7:
@@ -395,27 +322,19 @@ if __name__ == "__main__":
             tz   = float(sys.argv[4])
             lat  = float(sys.argv[5])
             lon  = float(sys.argv[6])
-            mode = int(sys.argv[7]) if len(sys.argv) > 7 else 1
             entries = calc_calendar(d_s, d_e, tz, lat, lon)
-            if mode == 2:
-                print_calendar(entries, d_s, d_e, tz, lat, lon)
-            else:
-                print_calendar_compact(entries, d_s, d_e, tz, lat, lon)
+            print_calendar(entries, d_s, d_e, tz, lat, lon)
 
         else:
             print("Использование:")
             print("  python nakshatra_calendar.py")
             print("  python nakshatra_calendar.py --examples")
-            print("  python nakshatra_calendar.py --period ГГГГ-ММ-ДД ГГГГ-ММ-ДД TZ LAT LON [1|2]")
-            print("    1 = краткий (по умолчанию)   2 = расширенный с падами")
+            print("  python nakshatra_calendar.py --period ГГГГ-ММ-ДД ГГГГ-ММ-ДД TZ LAT LON")
     else:
         try:
-            d_s, d_e, tz, lat, lon, mode = get_input()
+            d_s, d_e, tz, lat, lon = get_input()
             print("\n  Вычисляю...")
             entries = calc_calendar(d_s, d_e, tz, lat, lon)
-            if mode == 2:
-                print_calendar(entries, d_s, d_e, tz, lat, lon)
-            else:
-                print_calendar_compact(entries, d_s, d_e, tz, lat, lon)
+            print_calendar(entries, d_s, d_e, tz, lat, lon)
         except KeyboardInterrupt:
             print("\n\nВыход.")
