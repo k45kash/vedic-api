@@ -67,6 +67,24 @@ def root():
     return {"status": "ok", "message": "Vedic Astrology API работает"}
 
 
+@app.get("/api/debug")
+def debug():
+    import os, sys
+    from nakshatra_calculator import EPH_MODE, EPH_NOTE, EPHE_PATH
+    ephe_files = []
+    try:
+        ephe_files = os.listdir(EPHE_PATH)
+    except Exception as e:
+        ephe_files = [str(e)]
+    return {
+        "python": sys.version,
+        "eph_mode": EPH_MODE,
+        "eph_note": EPH_NOTE,
+        "ephe_path": EPHE_PATH,
+        "ephe_files": ephe_files,
+    }
+
+
 @app.post("/api/panchang")
 def panchang(req: PanchangRequest):
     """Панчанг: титхи, мухурты, хоры за период."""
