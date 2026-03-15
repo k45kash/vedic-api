@@ -76,12 +76,18 @@ def debug():
         ephe_files = os.listdir(EPHE_PATH)
     except Exception as e:
         ephe_files = [str(e)]
+    import swisseph as swe
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    jd_test = 2448083.90625  # 11.07.1990 09:45 UTC
+    aya = swe.get_ayanamsa_ut(jd_test)
     return {
         "python": sys.version,
         "eph_mode": EPH_MODE,
         "eph_note": EPH_NOTE,
         "ephe_path": EPHE_PATH,
         "ephe_files": ephe_files,
+        "sidm_lahiri_const": int(swe.SIDM_LAHIRI),
+        "aya_1990": round(aya, 6),
     }
 
 
