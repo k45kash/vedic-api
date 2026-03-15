@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════════════╗
 ║   ВЕДИЧЕСКАЯ АСТРОЛОГИЯ — Накшатра, Лагна, 12 Домов, Планеты        ║
-║   Swiss Ephemeris (pyswisseph) + диагностика граничных случаев       ║
+║   Swiss Ephemeris (pyswisseph)                                       ║
 ╚══════════════════════════════════════════════════════════════════════╝
 
 Установка:  pip install pyswisseph
@@ -15,22 +15,18 @@
 
 import math
 import sys
+import os
 from datetime import datetime
 
-try:
-    import swisseph as swe
-    USE_SWISSEPH = True
-    import os as _os
-    # ephe/ лежит рядом со скриптом; SE_EPHE_PATH переопределяет если нужно
-    EPHE_PATH = _os.environ.get(
-        "SE_EPHE_PATH",
-        _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "ephe")
-    )
-    swe.set_ephe_path(EPHE_PATH)
-    swe.set_sid_mode(swe.SIDM_LAHIRI)   # начальный режим; get_aya() переустанавливает его при каждом вызове
-except ImportError:
-    USE_SWISSEPH = False
-    print("⚠  pyswisseph не установлен. pip install pyswisseph\n")
+import swisseph as swe
+
+# ephe/ лежит рядом со скриптом; SE_EPHE_PATH переопределяет если нужно
+EPHE_PATH = os.environ.get(
+    "SE_EPHE_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "ephe")
+)
+swe.set_ephe_path(EPHE_PATH)
+swe.set_sid_mode(swe.SIDM_LAHIRI)   # начальный режим; get_aya() переустанавливает его при каждом вызове
 
 # ═══════════════════════════════════════════════════════════
 #  СПРАВОЧНЫЕ ДАННЫЕ
@@ -102,17 +98,16 @@ HOUSE_MEANINGS = {
     12: "Потери, moksha, заграница",
 }
 
-# Планеты для расчёта
 PLANETS = [
-    {"id": None,        "name": "Солнце",   "en": "Sun",     "abbr": "☉"},
-    {"id": None,        "name": "Луна",     "en": "Moon",    "abbr": "☽"},
-    {"id": None,        "name": "Марс",     "en": "Mars",    "abbr": "♂"},
-    {"id": None,        "name": "Меркурий", "en": "Mercury", "abbr": "☿"},
-    {"id": None,        "name": "Юпитер",   "en": "Jupiter", "abbr": "♃"},
-    {"id": None,        "name": "Венера",   "en": "Venus",   "abbr": "♀"},
-    {"id": None,        "name": "Сатурн",   "en": "Saturn",  "abbr": "♄"},
-    {"id": "rahu",      "name": "Раху",     "en": "Rahu",    "abbr": "☊"},
-    {"id": "ketu",      "name": "Кету",     "en": "Ketu",    "abbr": "☋"},
+    {"name": "Солнце",   "en": "Sun",     "abbr": "☉"},
+    {"name": "Луна",     "en": "Moon",    "abbr": "☽"},
+    {"name": "Марс",     "en": "Mars",    "abbr": "♂"},
+    {"name": "Меркурий", "en": "Mercury", "abbr": "☿"},
+    {"name": "Юпитер",   "en": "Jupiter", "abbr": "♃"},
+    {"name": "Венера",   "en": "Venus",   "abbr": "♀"},
+    {"name": "Сатурн",   "en": "Saturn",  "abbr": "♄"},
+    {"name": "Раху",     "en": "Rahu",    "abbr": "☊"},
+    {"name": "Кету",     "en": "Ketu",    "abbr": "☋"},
 ]
 
 NK_SIZE = 360 / 27
@@ -159,101 +154,24 @@ def to_jd(dt, tz):
     return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + B - 1524.5
 
 # ═══════════════════════════════════════════════════════════
-#  DELTA T  (TT - UT)
-# ═══════════════════════════════════════════════════════════
-# Таблица IERS/USNO — линейная интерполяция (сек)
-_DT_TABLE = [
-    (1620, 124), (1700, 22),  (1800, 13),  (1900, 3),
-    (1950, 29),  (1960, 33),  (1970, 40),  (1975, 45),
-    (1980, 50),  (1985, 54),  (1990, 57),  (1995, 61),
-    (2000, 63),  (2005, 65),  (2010, 66),  (2015, 68),
-    (2020, 69),  (2025, 69),  (2030, 70),
-]
-
-def get_delta_t(jd: float) -> float:
-    """Delta T (сек) для данного JD — линейная интерполяция."""
-    year = 2000.0 + (jd - 2451545.0) / 365.25
-    for i in range(len(_DT_TABLE) - 1):
-        y0, d0 = _DT_TABLE[i]
-        y1, d1 = _DT_TABLE[i + 1]
-        if y0 <= year <= y1:
-            return d0 + (d1 - d0) * (year - y0) / (y1 - y0)
-    return float(_DT_TABLE[-1][1])
-
-def jd_to_tt(jd: float) -> float:
-    """JD (UT) → JD (TT) для Meeus формул."""
-    return jd + get_delta_t(jd) / 86400.0
-
-# ═══════════════════════════════════════════════════════════
-#  ЭФЕМЕРИДЫ SWE — детектирование
-# ═══════════════════════════════════════════════════════════
-
-def detect_ephemeris() -> str:
-    """Возвращает 'SWISS' | 'MOSHIER' | 'JPL' | 'MEEUS' | 'UNAVAILABLE'."""
-    if not USE_SWISSEPH:
-        return "MEEUS"
-    try:
-        _, retflags = swe.calc_ut(2451545.0, swe.MOON, swe.FLG_SWIEPH)
-        if retflags & swe.FLG_SWIEPH:
-            return "SWISS"
-        if retflags & swe.FLG_MOSEPH:
-            return "MOSHIER"
-        return "JPL"
-    except Exception:
-        return "MOSHIER"
-
-EPH_MODE = detect_ephemeris()
-EPH_NOTE = {
-    "SWISS":       "Swiss Ephemeris (файлы DE431, ~0.001\")",
-    "MOSHIER":     "Swiss Ephemeris — Moshier (~1-2\", файлы .se1 не найдены)",
-    "JPL":         "Swiss Ephemeris — JPL",
-    "MEEUS":       "Meeus (алгоритм, ~1-2°, только Луна/Солнце)",
-    "UNAVAILABLE": "pyswisseph не установлен",
-}.get(EPH_MODE, EPH_MODE)
-
-# ═══════════════════════════════════════════════════════════
 #  АЯНАМША
 # ═══════════════════════════════════════════════════════════
 
 def get_aya(jd, mode=None):
-    if USE_SWISSEPH:
-        swe.set_sid_mode(mode if mode is not None else swe.SIDM_LAHIRI)
-        return swe.get_ayanamsa_ut(jd)   # _ut принимает UT напрямую, без ΔT
-    # Meeus fallback — ИСПРАВЛЕНО: эпоха J2000 (2451545.0), не B1900
-    # Значение 23.85° соответствует J2000.0, а не B1900.0
-    return 23.85 + (jd - 2451545.0) / 365.25 * 0.013958
+    swe.set_sid_mode(mode if mode is not None else swe.SIDM_LAHIRI)
+    return swe.get_ayanamsa_ut(jd)   # _ut принимает UT напрямую, без ΔT
 
 # ═══════════════════════════════════════════════════════════
 #  ЛУНА (тропическая, геоцентр / топоцентр)
 # ═══════════════════════════════════════════════════════════
 
 def moon_trop(jd, topo=False, lat=0, lon=0):
-    if USE_SWISSEPH:
-        fl = swe.FLG_SWIEPH
-        if topo:
-            swe.set_topo(lon, lat, 0)
-            fl |= swe.FLG_TOPOCTR
-        pos, ret = swe.calc_ut(jd, swe.MOON, fl)
-        return pos[0]
-    # Meeus fallback — используем TT (добавляем ΔT) для корректного T
-    jd_tt = jd_to_tt(jd)
-    T = (jd_tt - 2451545.0) / 36525.0
-    L0 = 218.3164477 + 481267.88123421 * T
-    Mm = 134.9633964 + 477198.8676313 * T
-    Ms = 357.5291092 + 35999.0502909 * T
-    F  =  93.2720950 + 483202.0175233 * T
-    D  = 297.8501921 + 445267.1114034 * T
-    dL = (6.288774 * math.sin(r(Mm))
-        + 1.274027 * math.sin(r(2*D - Mm))
-        + 0.658314 * math.sin(r(2*D))
-        + 0.213618 * math.sin(r(2*Mm))
-        - 0.185116 * math.sin(r(Ms))
-        - 0.114332 * math.sin(r(2*F))
-        + 0.058793 * math.sin(r(2*D - 2*Mm))
-        + 0.057066 * math.sin(r(2*D - Ms - Mm))
-        + 0.053322 * math.sin(r(2*D + Mm))
-        + 0.045758 * math.sin(r(2*D - Ms)))
-    return (L0 + dL) % 360
+    fl = swe.FLG_SWIEPH
+    if topo:
+        swe.set_topo(lon, lat, 0)
+        fl |= swe.FLG_TOPOCTR
+    pos, _ = swe.calc_ut(jd, swe.MOON, fl)
+    return pos[0]
 
 # ═══════════════════════════════════════════════════════════
 #  ПЛАНЕТЫ
@@ -268,63 +186,23 @@ def _planet_trop_swe(jd, planet_idx):
     swe_ids = [swe.SUN, swe.MOON, swe.MARS, swe.MERCURY,
                swe.JUPITER, swe.VENUS, swe.SATURN,
                swe.TRUE_NODE, swe.TRUE_NODE]
-    pid = swe_ids[planet_idx]
-    pos, ret = swe.calc_ut(jd, pid, swe.FLG_SWIEPH)
+    pos, _ = swe.calc_ut(jd, swe_ids[planet_idx], swe.FLG_SWIEPH)
     lon = pos[0]
-    if planet_idx == 8:
+    if planet_idx == 8:   # Кету = Раху + 180°
         lon = (lon + 180.0) % 360
     return lon
-
-def _sun_trop_meeus(jd):
-    T = (jd - 2451545.0) / 36525.0
-    L0 = 280.46646 + 36000.76983 * T
-    M  = 357.52911 + 35999.05029 * T - 0.0001537 * T*T
-    C  = ((1.914602 - 0.004817 * T - 0.000014 * T*T) * math.sin(r(M))
-        + (0.019993 - 0.000101 * T) * math.sin(r(2*M))
-        +  0.000289 * math.sin(r(3*M)))
-    return (L0 + C) % 360
 
 def get_planet_positions(jd, aya):
     """
     Возвращает список планет с тропическими/сидерическими координатами,
     накшатрой, падой и знаком.
-
-    Для планет без SWE: sid/sign/nakshatra не вычисляются — None.
-    Для планет с SWE при ошибке: исключение пробрасывается с именем планеты.
     """
     result = []
     for idx, p in enumerate(PLANETS):
-        available = USE_SWISSEPH or idx < 2
-
-        if not available:
-            # Без SWE данных по этой планете нет — не вычисляем мусор
-            result.append({
-                "idx":              idx,
-                "name":             p["name"],
-                "abbr":             p["abbr"],
-                "available":        False,
-                "trop":             None,
-                "sid":              None,
-                "sid_dms":          None,
-                "sign_num":         None,
-                "sign":             None,
-                "sign_ru":          None,
-                "deg_in_sign":      None,
-                "deg_in_sign_dms":  None,
-                "nakshatra":        None,
-                "nakshatra_ru":     None,
-                "pada":             None,
-                "nk_lord":          None,
-            })
-            continue
-
-        if USE_SWISSEPH:
-            try:
-                trop = _planet_trop_swe(jd, idx)
-            except Exception as e:
-                raise RuntimeError(f"SWE ошибка для {p['name']}: {e}") from e
-        else:
-            trop = _sun_trop_meeus(jd) if idx == 0 else moon_trop(jd)
+        try:
+            trop = _planet_trop_swe(jd, idx)
+        except Exception as e:
+            raise RuntimeError(f"SWE ошибка для {p['name']}: {e}") from e
 
         sid = (trop - aya) % 360
         sn, deg_in_sign = lon_to_sign(sid)
@@ -373,28 +251,27 @@ def check_boundary(jd, trop, aya, lat, lon):
             "is_boundary": dist < BOUNDARY_WARN, "topo": None, "aya_compare": {}}
     if not res["is_boundary"]:
         return res
-    if USE_SWISSEPH:
-        t_topo = moon_trop(jd, True, lat, lon)
-        sid_t  = (t_topo - aya) % 360
-        res["topo"] = {
-            "delta_arcsec": round((sid_t - sid) * 3600, 2),
-            "nk_geo":  get_nk(sid)["name"],
-            "nk_topo": get_nk(sid_t)["name"],
-            "changes": get_nk(sid)["num"] != get_nk(sid_t)["num"],
-        }
-        modes = {
-            "Lahiri":     (swe.SIDM_LAHIRI,        "Лахири"),
-            "KP":         (swe.SIDM_KRISHNAMURTI,  "Кришнамурти"),
-            "TrueChitra": (swe.SIDM_TRUE_CITRA,    "True Chitra"),
-        }
-        for nm, (mode, lbl) in modes.items():
-            a  = get_aya(jd, mode)
-            s  = (trop - a) % 360
-            nk = get_nk(s)
-            res["aya_compare"][nm] = {"label": lbl, "aya": round(a, 4),
-                                      "nk": nk["name"], "pada": nk["pada"]}
-        swe.set_sid_mode(swe.SIDM_LAHIRI)   # восстанавливаем глобальный режим
-        res["ayas_agree"] = len(set(v["nk"] for v in res["aya_compare"].values())) == 1
+    t_topo = moon_trop(jd, True, lat, lon)
+    sid_t  = (t_topo - aya) % 360
+    res["topo"] = {
+        "delta_arcsec": round((sid_t - sid) * 3600, 2),
+        "nk_geo":  get_nk(sid)["name"],
+        "nk_topo": get_nk(sid_t)["name"],
+        "changes": get_nk(sid)["num"] != get_nk(sid_t)["num"],
+    }
+    modes = {
+        "Lahiri":     (swe.SIDM_LAHIRI,        "Лахири"),
+        "KP":         (swe.SIDM_KRISHNAMURTI,  "Кришнамурти"),
+        "TrueChitra": (swe.SIDM_TRUE_CITRA,    "True Chitra"),
+    }
+    for nm, (mode, lbl) in modes.items():
+        a  = get_aya(jd, mode)
+        s  = (trop - a) % 360
+        nk = get_nk(s)
+        res["aya_compare"][nm] = {"label": lbl, "aya": round(a, 4),
+                                  "nk": nk["name"], "pada": nk["pada"]}
+    swe.set_sid_mode(swe.SIDM_LAHIRI)   # восстанавливаем после сравнения аянамш
+    res["ayas_agree"] = len(set(v["nk"] for v in res["aya_compare"].values())) == 1
     return res
 
 # ═══════════════════════════════════════════════════════════
@@ -402,20 +279,8 @@ def check_boundary(jd, trop, aya, lat, lon):
 # ═══════════════════════════════════════════════════════════
 
 def get_lagna(jd, lat, lon, aya):
-    if USE_SWISSEPH:
-        _, ascmc = swe.houses(jd, lat, lon, b'W')
-        trop = ascmc[0]
-    else:
-        T     = (jd - 2451545.0) / 36525.0
-        gmst  = (280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T*T) % 360
-        lst   = (gmst + lon) % 360
-        ramc  = math.radians(lst)
-        eps   = math.radians(23.439291111 - 0.013004167 * T)
-        lat_r = math.radians(lat)
-        ya    = -math.cos(ramc)
-        xa    = math.sin(ramc) * math.cos(eps) + math.tan(lat_r) * math.sin(eps)
-        trop  = math.degrees(math.atan2(ya, xa)) % 360
-
+    _, ascmc = swe.houses(jd, lat, lon, b'W')
+    trop = ascmc[0]
     sid = (trop - aya) % 360
     sn, deg = lon_to_sign(sid)
 
@@ -460,10 +325,7 @@ def calculate(year, month, day, hour, minute, tz, lat, lon):
     # Определяем дом для каждой планеты (Whole Sign)
     lagna_sign = lg["sign_num"]
     for p in planets:
-        if p["available"]:
-            p["house"] = ((p["sign_num"] - lagna_sign) % 12) + 1
-        else:
-            p["house"] = None
+        p["house"] = ((p["sign_num"] - lagna_sign) % 12) + 1
 
     return {
         "input":   {"date": f"{day:02d}/{month:02d}/{year}",
@@ -474,7 +336,7 @@ def calculate(year, month, day, hour, minute, tz, lat, lon):
         "moon_trop":   round(trop, 4),
         "moon_sid":    round(sid, 4),
         "moon_dms":    dms(sid),
-        "method":      EPH_NOTE,
+        "method":      "Swiss Ephemeris (файлы DE431, ~0.001\")",
         "nk":          nk,
         "lagna":       lg,
         "boundary":    bd,
@@ -550,9 +412,6 @@ def print_result(res):
     print(hdr)
     print("  " + "─" * 72)
     for p in res["planets"]:
-        if not p["available"] and not USE_SWISSEPH:
-            print(f"  {p['abbr']+' '+p['name']:<12}{'н/д':<13}{'н/д':<12}{'':5}{'н/д (нужен pyswisseph)'}")
-            continue
         print(f"  {p['abbr']+' '+p['name']:<12}"
               f"{p['sign_ru']:<13}"
               f"{p['deg_in_sign_dms']:<12}"
@@ -563,12 +422,9 @@ def print_result(res):
 
     # ── 12 Домов ─────────────────────────────────────────
     print(f"\n  ── 12 ДОМОВ (Whole Sign) ─────────────────────────────────")
-    # Для каждого дома выводим планеты которые в нём
     house_planets = {}
     for p in res["planets"]:
-        if p["available"] or USE_SWISSEPH:
-            h = p["house"]
-            house_planets.setdefault(h, []).append(p["abbr"] + p["name"])
+        house_planets.setdefault(p["house"], []).append(p["abbr"] + p["name"])
 
     print(f"  {'Дом':<5}{'Знак':<13}{'Владелец':<11}{'Планеты':<20}Значение")
     print("  " + "─" * (W - 2))

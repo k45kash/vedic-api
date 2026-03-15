@@ -70,7 +70,7 @@ def root():
 @app.get("/api/debug")
 def debug():
     import os, sys
-    from nakshatra_calculator import EPH_MODE, EPH_NOTE, EPHE_PATH
+    from nakshatra_calculator import EPHE_PATH
     ephe_files = []
     try:
         ephe_files = os.listdir(EPHE_PATH)
@@ -87,7 +87,7 @@ def debug():
         "eph_mode": EPH_MODE,
         "eph_note": EPH_NOTE,
         "ephe_path": EPHE_PATH,
-        "ephe_files": ephe_files,
+        "ephe_files": sorted(ephe_files),
         "sidm_lahiri_const": int(swe.SIDM_LAHIRI),
         "aya_now": round(aya_now, 6),
         "aya_now_date": now.strftime("%Y-%m-%d %H:%M UTC"),
