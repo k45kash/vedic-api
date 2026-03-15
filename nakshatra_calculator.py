@@ -27,7 +27,7 @@ try:
         _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "ephe")
     )
     swe.set_ephe_path(EPHE_PATH)
-    swe.set_sid_mode(swe.SIDM_LAHIRI)   # глобальный режим — задаётся один раз
+    swe.set_sid_mode(swe.SIDM_LAHIRI)   # начальный режим; get_aya() переустанавливает его при каждом вызове
 except ImportError:
     USE_SWISSEPH = False
     print("⚠  pyswisseph не установлен. pip install pyswisseph\n")
@@ -189,7 +189,7 @@ def jd_to_tt(jd: float) -> float:
 # ═══════════════════════════════════════════════════════════
 
 def detect_ephemeris() -> str:
-    """Возвращает 'SWISS' | 'MOSHIER' | 'MEEUS' | 'UNAVAILABLE'."""
+    """Возвращает 'SWISS' | 'MOSHIER' | 'JPL' | 'MEEUS' | 'UNAVAILABLE'."""
     if not USE_SWISSEPH:
         return "MEEUS"
     try:
@@ -263,8 +263,7 @@ def _planet_trop_swe(jd, planet_idx):
     """Тропическая долгота планеты через SWE.
 
     Раху/Кету: используем TRUE_NODE (истинный узел).
-    Retflags читаются при каждом вызове — если SWE молча переключился
-    на Moshier (файлы .se1 недоступны), обновляем EPH_MODE глобально.
+    Кету = Раху + 180°.
     """
     swe_ids = [swe.SUN, swe.MOON, swe.MARS, swe.MERCURY,
                swe.JUPITER, swe.VENUS, swe.SATURN,

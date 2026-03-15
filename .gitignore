@@ -8,9 +8,12 @@ __pycache__/
 .DS_Store
 .idea/
 
-# Эфемериды — игнорируем всё кроме файлов для эпохи 1800-2400 (seXX_18.se1)
+# Эфемериды — игнорируем всё кроме файлов для эпохи 600-2400 (seXX_06/12/18.se1)
 ephe/sat/
 ephe/se*
+!ephe/sepl_06.se1
+!ephe/sepl_12.se1
 !ephe/sepl_18.se1
+!ephe/semo_06.se1
+!ephe/semo_12.se1
 !ephe/semo_18.se1
-!ephe/seas_18.se1
