@@ -84,8 +84,6 @@ def debug():
     aya_now = swe.get_ayanamsa_ut(jd_now)
     return {
         "python": sys.version,
-        "eph_mode": EPH_MODE,
-        "eph_note": EPH_NOTE,
         "ephe_path": EPHE_PATH,
         "ephe_files": sorted(ephe_files),
         "sidm_lahiri_const": int(swe.SIDM_LAHIRI),
