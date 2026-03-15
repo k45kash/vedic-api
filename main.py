@@ -77,9 +77,11 @@ def debug():
     except Exception as e:
         ephe_files = [str(e)]
     import swisseph as swe
+    from datetime import datetime, timezone
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    jd_test = 2448083.90625  # 11.07.1990 09:45 UTC
-    aya = swe.get_ayanamsa_ut(jd_test)
+    now = datetime.now(timezone.utc)
+    jd_now = swe.julday(now.year, now.month, now.day, now.hour + now.minute / 60)
+    aya_now = swe.get_ayanamsa_ut(jd_now)
     return {
         "python": sys.version,
         "eph_mode": EPH_MODE,
@@ -87,7 +89,8 @@ def debug():
         "ephe_path": EPHE_PATH,
         "ephe_files": ephe_files,
         "sidm_lahiri_const": int(swe.SIDM_LAHIRI),
-        "aya_1990": round(aya, 6),
+        "aya_now": round(aya_now, 6),
+        "aya_now_date": now.strftime("%Y-%m-%d %H:%M UTC"),
     }
 
 
