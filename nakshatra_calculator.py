@@ -229,19 +229,12 @@ def get_aya(jd, mode=None):
 # ═══════════════════════════════════════════════════════════
 
 def moon_trop(jd, topo=False, lat=0, lon=0):
-    global EPH_MODE, EPH_NOTE
     if USE_SWISSEPH:
         fl = swe.FLG_SWIEPH
         if topo:
             swe.set_topo(lon, lat, 0)
             fl |= swe.FLG_TOPOCTR
         pos, ret = swe.calc_ut(jd, swe.MOON, fl)
-        if ret & swe.FLG_MOSEPH and EPH_MODE != "MOSHIER":
-            EPH_MODE = "MOSHIER"
-            EPH_NOTE = "Swiss Ephemeris — Moshier (~1-2\", файлы .se1 не найдены)"
-        elif ret & swe.FLG_SWIEPH and EPH_MODE == "MOSHIER":
-            EPH_MODE = "SWISS"
-            EPH_NOTE = "Swiss Ephemeris (файлы DE431, ~0.001\")"
         return pos[0]
     # Meeus fallback — используем TT (добавляем ΔT) для корректного T
     jd_tt = jd_to_tt(jd)
@@ -274,19 +267,11 @@ def _planet_trop_swe(jd, planet_idx):
     Retflags читаются при каждом вызове — если SWE молча переключился
     на Moshier (файлы .se1 недоступны), обновляем EPH_MODE глобально.
     """
-    global EPH_MODE, EPH_NOTE
     swe_ids = [swe.SUN, swe.MOON, swe.MARS, swe.MERCURY,
                swe.JUPITER, swe.VENUS, swe.SATURN,
                swe.TRUE_NODE, swe.TRUE_NODE]
     pid = swe_ids[planet_idx]
     pos, ret = swe.calc_ut(jd, pid, swe.FLG_SWIEPH)
-    # Обновляем режим если SWE переключился
-    if ret & swe.FLG_MOSEPH and EPH_MODE != "MOSHIER":
-        EPH_MODE = "MOSHIER"
-        EPH_NOTE = "Swiss Ephemeris — Moshier (~1-2\", файлы .se1 не найдены)"
-    elif ret & swe.FLG_SWIEPH and EPH_MODE == "MOSHIER":
-        EPH_MODE = "SWISS"
-        EPH_NOTE = "Swiss Ephemeris (файлы DE431, ~0.001\")"
     lon = pos[0]
     if planet_idx == 8:
         lon = (lon + 180.0) % 360
