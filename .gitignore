@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.csv
+*.zip
+*.txt
+.DS_Store
+.idea/
+
+# Эфемериды — игнорируем всё кроме файлов для эпохи 1800-2400 (seXX_18.se1)
+ephe/sat/
+ephe/se*
+!ephe/sepl_18.se1
+!ephe/semo_18.se1
+!ephe/seas_18.se1
