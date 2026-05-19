@@ -8,14 +8,19 @@ FastAPI сервер для ведической астрологии.
     http://localhost:8000/docs
 """
 
+import os
 from datetime import date
+from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from Panchangam import calc_panchang
 from nakshatra_calculator import calculate
 from nakshatra_calendar import calc_calendar
+from sade_sati import calc_sade_sati
 
 app = FastAPI(title="Vedic Astrology API", version="1.0.0")
 
@@ -60,11 +65,33 @@ class CalendarRequest(BaseModel):
     prec_sec: float = 1.0
 
 
+class SadeSatiRequest(BaseModel):
+    year: int
+    month: int
+    day: int
+    hour: int = 12
+    minute: int = 0
+    tz: float
+    lat: float = 0.0
+    lon: float = 0.0
+    search_from: Optional[date] = None
+    search_to:   Optional[date] = None
+
+
 # ─── Эндпоинты ──────────────────────────────────────────────────────────────
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 @app.get("/")
 def root():
     return {"status": "ok", "message": "Vedic Astrology API работает"}
+
+
+@app.get("/sade-sati")
+def sade_sati_page():
+    return FileResponse(os.path.join(STATIC_DIR, "sade-sati.html"))
 
 
 @app.get("/api/debug")
@@ -140,6 +167,25 @@ def calendar(req: CalendarRequest):
             lon=req.lon,
             step_h=req.step_h,
             prec_sec=req.prec_sec,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sade-sati")
+def sade_sati(req: SadeSatiRequest):
+    """Сади Сати + Аштама Шани + Кантака Шани по дате рождения.
+
+    По умолчанию ищет периоды от даты рождения до +120 лет.
+    """
+    try:
+        result = calc_sade_sati(
+            year=req.year, month=req.month, day=req.day,
+            hour=req.hour, minute=req.minute,
+            tz=req.tz, lat=req.lat, lon=req.lon,
+            search_from=req.search_from,
+            search_to=req.search_to,
         )
         return result
     except Exception as e:
