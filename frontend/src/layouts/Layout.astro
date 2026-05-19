@@ -1,0 +1,82 @@
+---
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} — Vedic</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        min-height: 100vh;
+      }
+
+      nav {
+        background: rgba(255,255,255,0.85);
+        backdrop-filter: saturate(180%) blur(20px);
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      nav ul {
+        display: flex;
+        gap: 0;
+        list-style: none;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      nav a {
+        display: block;
+        padding: 16px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #1d1d1f;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.15s;
+      }
+
+      nav a:hover { opacity: 1; }
+      nav a.active { opacity: 1; color: #0071e3; }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <ul>
+        <li><a href="/">Накшатра</a></li>
+        <li><a href="/panchang">Панчанг</a></li>
+        <li><a href="/calendar">Календарь</a></li>
+        <li><a href="/sade-sati">Сади Сати</a></li>
+      </ul>
+    </nav>
+    <main>
+      <slot />
+    </main>
+    <script>
+      const path = window.location.pathname;
+      document.querySelectorAll("nav a").forEach(a => {
+        if ((a as HTMLAnchorElement).pathname === path) a.classList.add("active");
+      });
+    </script>
+  </body>
+</html>

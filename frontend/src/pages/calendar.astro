@@ -1,0 +1,230 @@
+---
+import Layout from "../layouts/Layout.astro";
+import CityField from "../components/CityField.astro";
+---
+
+<Layout title="Календарь">
+  <h1>Календарь накшатр</h1>
+  <p class="subtitle">Транзиты Луны по накшатрам за выбранный период</p>
+
+  <form id="form">
+    <div class="row">
+      <div class="field">
+        <label>Дата начала</label>
+        <input type="date" name="date_start" required />
+      </div>
+      <div class="field">
+        <label>Дата конца</label>
+        <input type="date" name="date_end" required />
+      </div>
+      <div class="field">
+        <label>Часовой пояс (UTC±)</label>
+        <input type="number" name="tz" step="0.5" value="3" required />
+      </div>
+    </div>
+    <div class="row">
+      <CityField />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Широта</label>
+        <input type="number" name="lat" step="0.0001" value="45.0428" required />
+      </div>
+      <div class="field">
+        <label>Долгота</label>
+        <input type="number" name="lon" step="0.0001" value="41.9734" required />
+      </div>
+    </div>
+    <button type="submit">Рассчитать</button>
+  </form>
+
+  <div id="result"></div>
+</Layout>
+
+<style>
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+  .subtitle { margin-top: 6px; font-size: 15px; color: #6e6e73; margin-bottom: 36px; }
+
+  form {
+    background: #fff;
+    border-radius: 18px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 140px; }
+  label { font-size: 13px; font-weight: 500; color: #6e6e73; }
+
+  input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: #f5f5f7;
+    font-size: 15px;
+    font-family: inherit;
+    color: #1d1d1f;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+  input:focus { box-shadow: 0 0 0 3px rgba(0,113,227,0.25); }
+
+  button {
+    align-self: flex-start;
+    padding: 12px 28px;
+    background: #0071e3;
+    color: #fff;
+    border: none;
+    border-radius: 980px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #0077ed; }
+  button:disabled { background: #a1a1a6; cursor: default; }
+</style>
+
+<style is:global>
+  #result { margin-top: 32px; }
+
+  .nk-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .nk-row {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+
+  .nk-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+  .nk-name { font-weight: 600; font-size: 15px; color: #1d1d1f; }
+  .nk-name-en { font-size: 12px; color: #a1a1a6; margin-top: 1px; }
+
+  .nk-meta { font-size: 13px; color: #6e6e73; }
+  .nk-meta strong { color: #1d1d1f; font-weight: 500; }
+
+  .nk-duration {
+    font-size: 13px;
+    color: #6e6e73;
+    text-align: right;
+  }
+
+  .nk-padas {
+    display: none;
+    background: #f5f5f7;
+    border-radius: 0 0 14px 14px;
+    overflow: hidden;
+    margin-top: -12px;
+    padding: 4px 20px 12px;
+  }
+
+  .nk-padas.open { display: block; }
+
+  .pada-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 1fr 1fr;
+    font-size: 13px;
+    padding: 8px 0;
+    border-top: 1px solid #e8e8ed;
+    color: #1d1d1f;
+  }
+  .pada-row:first-child { border-top: none; }
+  .pada-num { color: #a1a1a6; font-weight: 600; }
+
+  .error   { color: #ff3b30; font-size: 14px; margin-top: 16px; }
+  .loading { color: #6e6e73; font-size: 14px; margin-top: 16px; }
+</style>
+
+<script>
+  const API = "https://vedic-api-production-626f.up.railway.app";
+  const form = document.getElementById("form") as HTMLFormElement;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn    = form.querySelector("button")!;
+    const result = document.getElementById("result")!;
+
+    const date_start = (form.elements.namedItem("date_start") as HTMLInputElement).value;
+    const date_end   = (form.elements.namedItem("date_end")   as HTMLInputElement).value;
+    const tz  = parseFloat((form.elements.namedItem("tz")  as HTMLInputElement).value);
+    const lat = parseFloat((form.elements.namedItem("lat") as HTMLInputElement).value);
+    const lon = parseFloat((form.elements.namedItem("lon") as HTMLInputElement).value);
+
+    btn.disabled = true;
+    btn.textContent = "Считаем...";
+    result.innerHTML = '<p class="loading">Выполняется расчёт…</p>';
+
+    try {
+      const res = await fetch(`${API}/api/calendar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date_start, date_end, tz, lat, lon }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail);
+      result.innerHTML = renderCalendar(await res.json());
+      bindPadas();
+    } catch (err: any) {
+      result.innerHTML = `<p class="error">Ошибка: ${err.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Рассчитать";
+    }
+  });
+
+  function fmt(dt: string) {
+    return dt ? dt.replace("T", " ").slice(0, 16) : "—";
+  }
+
+  function renderCalendar(items: any[]): string {
+    if (!items.length) return '<p class="error">Нет данных</p>';
+
+    const rows = items.map((nk: any, i: number) => {
+      const padas = nk.padas?.map((p: any) => `
+        <div class="pada-row">
+          <span class="pada-num">${p.pada}</span>
+          <span>${fmt(p.dt_start)}</span>
+          <span>${fmt(p.dt_end)}</span>
+          <span>${p.duration_h?.toFixed(1)} ч</span>
+        </div>
+      `).join("") ?? "";
+
+      return `
+        <div class="nk-row" data-i="${i}">
+          <div>
+            <div class="nk-name">#${nk.nk_num} ${nk.ru}</div>
+            <div class="nk-name-en">${nk.name}</div>
+          </div>
+          <div class="nk-meta"><strong>${nk.lord}</strong><br/>Гана: ${nk.gana}</div>
+          <div class="nk-meta">${fmt(nk.dt_start)}</div>
+          <div class="nk-meta">${fmt(nk.dt_end)}</div>
+          <div class="nk-duration">${nk.duration_h?.toFixed(1)} ч</div>
+        </div>
+        ${padas ? `<div class="nk-padas" data-i="${i}">${padas}</div>` : ""}
+      `;
+    }).join("");
+
+    return `<div class="nk-list">${rows}</div>`;
+  }
+
+  function bindPadas() {
+    document.querySelectorAll<HTMLElement>(".nk-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        const i = row.dataset.i;
+        const padas = document.querySelector<HTMLElement>(`.nk-padas[data-i="${i}"]`);
+        padas?.classList.toggle("open");
+      });
+    });
+  }
+</script>

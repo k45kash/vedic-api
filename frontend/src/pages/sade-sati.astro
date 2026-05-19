@@ -1,0 +1,398 @@
+---
+import Layout from "../layouts/Layout.astro";
+import CityField from "../components/CityField.astro";
+---
+
+<Layout title="Сади Сати">
+  <h1>Сади Сати</h1>
+  <p class="subtitle">Транзит Сатурна через три знака вокруг натальной Луны (~7,5 лет). Параллельно — Аштама и Кантака Шани.</p>
+
+  <form id="form">
+    <div class="row">
+      <div class="field">
+        <label>Дата рождения</label>
+        <input type="date" name="date" required value="1990-05-17" />
+      </div>
+      <div class="field">
+        <label>Время</label>
+        <input type="time" name="time" required value="14:30" />
+      </div>
+    </div>
+    <div class="row"><CityField /></div>
+    <div class="row">
+      <div class="field">
+        <label>Широта</label>
+        <input type="number" name="lat" step="0.0001" value="45.0428" required />
+      </div>
+      <div class="field">
+        <label>Долгота</label>
+        <input type="number" name="lon" step="0.0001" value="41.9734" required />
+      </div>
+      <div class="field">
+        <label>UTC ±, ч</label>
+        <input type="number" name="tz" step="0.5" value="3" required />
+      </div>
+    </div>
+    <button type="submit">Рассчитать</button>
+  </form>
+
+  <div id="result"></div>
+</Layout>
+
+<style>
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+  .subtitle { margin-top: 6px; font-size: 15px; color: #6e6e73; margin-bottom: 36px; max-width: 640px; }
+
+  form {
+    background: #fff;
+    border-radius: 18px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 140px; }
+  label { font-size: 13px; font-weight: 500; color: #6e6e73; }
+  input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: #f5f5f7;
+    font-size: 15px;
+    font-family: inherit;
+    color: #1d1d1f;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+  input:focus { box-shadow: 0 0 0 3px rgba(0,113,227,0.25); }
+
+  button {
+    align-self: flex-start;
+    padding: 12px 28px;
+    background: #0071e3;
+    color: #fff;
+    border: none;
+    border-radius: 980px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #0077ed; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+
+<style is:global>
+  #result { margin-top: 32px; display: flex; flex-direction: column; gap: 24px; }
+  #result h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+  }
+  #result .card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  /* Стат-карточки */
+  .ss-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .ss-stat { background: #f5f5f7; padding: 12px 14px; border-radius: 12px; }
+  .ss-stat-lbl { font-size: 11px; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ss-stat-val { font-size: 15px; margin-top: 4px; color: #1d1d1f; font-weight: 500; }
+
+  .ss-warn {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 184, 0, 0.1);
+    border: 1px solid rgba(255, 184, 0, 0.3);
+    border-radius: 10px;
+    font-size: 13px;
+    color: #715200;
+  }
+
+  /* Сейчас */
+  .ss-now {
+    padding: 16px 20px;
+    border-radius: 14px;
+    border-left: 4px solid #d0454c;
+    background: #f5f5f7;
+  }
+  .ss-now + .ss-now { margin-top: 12px; }
+  .ss-phase-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #1a1310;
+  }
+  .ss-now-meta { font-size: 13px; color: #6e6e73; margin-top: 4px; }
+  .ss-progress { margin-top: 10px; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; }
+  .ss-progress-fill { height: 100%; background: #d0454c; }
+
+  /* Цикл */
+  .ss-cycle { margin-bottom: 24px; }
+  .ss-cycle:last-child { margin-bottom: 0; }
+  .ss-cycle-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
+  .ss-cycle-title { font-weight: 600; font-size: 15px; }
+  .ss-cycle-meta { color: #6e6e73; font-size: 13px; }
+
+  .ss-timeline { display: flex; height: 38px; border-radius: 10px; overflow: hidden; }
+  .ss-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: rgba(0,0,0,0.75);
+    font-weight: 600;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .ss-seg-aarohini  { background: #f5a623; }
+  .ss-seg-madhya    { background: #d0454c; color: #fff; }
+  .ss-seg-avarohini { background: #6cbf6c; }
+
+  .ss-eps { margin-top: 10px; font-size: 13px; color: #6e6e73; }
+  .ss-ep-row {
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    gap: 12px;
+    padding: 6px 0;
+    align-items: center;
+  }
+  .ss-ep-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #1a1310;
+  }
+  .ss-tag-aarohini  { background: #f5a623; }
+  .ss-tag-madhya    { background: #d0454c; color: #fff; }
+  .ss-tag-avarohini { background: #6cbf6c; }
+  .ss-retro {
+    display: inline-block;
+    margin-left: 3px;
+    font-weight: 700;
+    cursor: help;
+    opacity: 0.85;
+  }
+
+  /* Шани */
+  .ss-shani { display: grid; gap: 8px; }
+  .ss-shani-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    padding: 10px 14px;
+    background: #f5f5f7;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .ss-shani-row.current {
+    border-left: 3px solid #0071e3;
+    background: rgba(0, 113, 227, 0.06);
+  }
+  .ss-shani-row .when { color: #6e6e73; }
+  .ss-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #0071e3;
+    color: #fff;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+  }
+
+  .ss-error { padding: 14px 18px; background: #ffe3e3; color: #c92a2a; border-radius: 10px; }
+  .ss-loading { padding: 14px 0; color: #6e6e73; }
+</style>
+
+<script>
+  const API = "https://vedic-api-production-626f.up.railway.app";
+  const form = document.getElementById("form") as HTMLFormElement;
+  const resultEl = document.getElementById("result")!;
+
+  const PHASE_RU = { Aarohini: "Aarohini", Madhya: "Madhya (пик)", Avarohini: "Avarohini" };
+  const PHASE_CLASS: Record<string, string> = { Aarohini: "aarohini", Madhya: "madhya", Avarohini: "avarohini" };
+
+  function fmtDate(s: string) {
+    if (!s) return "";
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  function fmtYears(days: number) {
+    if (days < 365) return `${Math.round(days)} дн`;
+    const y = Math.floor(days / 365.25);
+    const m = Math.round((days - y * 365.25) / 30.44);
+    return m === 0 ? `${y} г` : `${y} г ${m} мес`;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector("button[type=submit]") as HTMLButtonElement;
+    btn.disabled = true;
+    resultEl.innerHTML = '<div class="ss-loading">Считаем 120 лет транзитов Сатурна…</div>';
+
+    const fd = new FormData(form);
+    const [y, m, d] = (fd.get("date") as string).split("-").map(Number);
+    const [hh, mm] = (fd.get("time") as string).split(":").map(Number);
+
+    const body = {
+      year: y, month: m, day: d,
+      hour: hh, minute: mm,
+      tz: +(fd.get("tz") as string),
+      lat: +(fd.get("lat") as string),
+      lon: +(fd.get("lon") as string),
+    };
+
+    try {
+      const r = await fetch(`${API}/api/sade-sati`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || `HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      resultEl.innerHTML = render(data);
+    } catch (ex: any) {
+      resultEl.innerHTML = `<div class="ss-error">Ошибка: ${ex.message}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function render(d: any) {
+    return [
+      renderNatal(d.natal_moon),
+      renderCurrent(d.current),
+      renderCycles(d.sade_sati_cycles),
+      renderShani("Аштама Шани", d.ashtama_sign, d.ashtama_shani_periods, d.current.ashtama_shani),
+      renderShani("Кантака Шани", d.kantaka_sign, d.kantaka_shani_periods, d.current.kantaka_shani),
+    ].join("");
+  }
+
+  function renderNatal(n: any) {
+    const b = n.boundary || {};
+    let warn = "";
+    if (b.topo_applied) {
+      warn = `<div class="ss-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы знака — применён топоцентрический расчёт
+        (поправка ${b.delta_arcsec}″).
+        ${b.sign_changed_by_topo ? "<b>Знак изменился относительно геоцентрического!</b>" : "Знак не изменился."}
+      </div>`;
+    } else if (b.near_boundary) {
+      warn = `<div class="ss-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы знака.
+      </div>`;
+    }
+    return `
+      <section>
+        <h2>Натальная Луна</h2>
+        <div class="card">
+          <div class="ss-stats">
+            <div class="ss-stat"><div class="ss-stat-lbl">Знак (раши)</div><div class="ss-stat-val">${n.sign_ru} (${n.sign})</div></div>
+            <div class="ss-stat"><div class="ss-stat-lbl">Градус в знаке</div><div class="ss-stat-val">${n.deg_in_sign_dms}</div></div>
+            <div class="ss-stat"><div class="ss-stat-lbl">Накшатра</div><div class="ss-stat-val">${n.nakshatra_ru} · пада ${n.pada}</div></div>
+            <div class="ss-stat"><div class="ss-stat-lbl">Управитель</div><div class="ss-stat-val">${n.nk_lord}</div></div>
+            <div class="ss-stat"><div class="ss-stat-lbl">Фрейм</div><div class="ss-stat-val">${n.frame === "topocentric" ? "топоцентрический" : "геоцентрический"}</div></div>
+          </div>
+          ${warn}
+        </div>
+      </section>`;
+  }
+
+  function renderCurrent(c: any) {
+    if (!c.sade_sati && !c.ashtama_shani && !c.kantaka_shani) {
+      return `<section><h2>Сейчас</h2><div class="card"><div style="color:#6e6e73">Сейчас ни один период не активен.</div></div></section>`;
+    }
+    const blocks: string[] = [];
+    if (c.sade_sati) {
+      const ph = c.sade_sati.phase;
+      const cls = PHASE_CLASS[ph] || "madhya";
+      const colors: Record<string, string> = { aarohini: "#f5a623", madhya: "#d0454c", avarohini: "#6cbf6c" };
+      const retro = c.sade_sati.is_retrograde_return ? ' <span class="ss-retro" title="Ретроградный возврат">↺</span>' : "";
+      blocks.push(`
+        <div class="ss-now" style="border-color: ${colors[cls]}">
+          <span class="ss-phase-tag" style="background: ${colors[cls]}${cls === "madhya" ? "; color: #fff" : ""}">САДИ САТИ · ${PHASE_RU[ph as keyof typeof PHASE_RU]}${retro}</span>
+          <div style="margin-top: 10px; font-size: 16px">Сатурн в знаке <b>${c.sade_sati.sign_ru}</b>${c.sade_sati.is_retrograde_return ? ' <span style="color:#6e6e73; font-size:13px">(возврат после ретроградности)</span>' : ""}</div>
+          <div class="ss-now-meta">${fmtDate(c.sade_sati.dt_start)} → ${fmtDate(c.sade_sati.dt_end)} · осталось ${fmtYears(c.sade_sati.days_remaining)}</div>
+          <div class="ss-progress"><div class="ss-progress-fill" style="width: ${c.sade_sati.progress * 100}%; background: ${colors[cls]}"></div></div>
+        </div>`);
+    }
+    if (c.ashtama_shani) {
+      blocks.push(`<div class="ss-now" style="border-color: #7d6cbf">
+        <span class="ss-phase-tag" style="background: #7d6cbf; color: #fff">АШТАМА ШАНИ</span>
+        <div style="margin-top: 8px">Сатурн в ${c.ashtama_shani.sign_ru} · осталось ${fmtYears(c.ashtama_shani.days_remaining)}</div>
+      </div>`);
+    }
+    if (c.kantaka_shani) {
+      blocks.push(`<div class="ss-now" style="border-color: #4a90e2">
+        <span class="ss-phase-tag" style="background: #4a90e2; color: #fff">КАНТАКА ШАНИ</span>
+        <div style="margin-top: 8px">Сатурн в ${c.kantaka_shani.sign_ru} · осталось ${fmtYears(c.kantaka_shani.days_remaining)}</div>
+      </div>`);
+    }
+    return `<section><h2>Сейчас</h2><div class="card">${blocks.join("")}</div></section>`;
+  }
+
+  function renderCycles(cycles: any[]) {
+    if (!cycles.length) return "";
+    const inner = cycles.map((c, i) => {
+      const t0 = new Date(c.episodes[0].dt_start).getTime();
+      const t1 = new Date(c.episodes[c.episodes.length - 1].dt_end).getTime();
+      const total = t1 - t0;
+      const segs = c.episodes.map((ep: any) => {
+        const a = new Date(ep.dt_start).getTime();
+        const b = new Date(ep.dt_end).getTime();
+        const w = total > 0 ? ((b - a) / total) * 100 : 0;
+        const cls = PHASE_CLASS[ep.phase] || "madhya";
+        return `<div class="ss-seg ss-seg-${cls}" style="width:${w}%" title="${ep.phase} · ${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}">${w > 8 ? ep.phase : ""}</div>`;
+      }).join("");
+      const rows = c.episodes.map((ep: any) => `
+        <div class="ss-ep-row">
+          <span class="ss-ep-tag ss-tag-${PHASE_CLASS[ep.phase]}">${ep.phase}${ep.is_retrograde_return ? ' <span class="ss-retro" title="Ретроградный возврат">↺</span>' : ""}</span>
+          <span>${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}</span>
+          <span>${Math.round(ep.duration_days)} дн</span>
+        </div>`).join("");
+      let flag = "";
+      if (c.truncated_start) flag += " · начало до даты рождения";
+      if (c.truncated_end)   flag += " · конец вне окна поиска";
+      return `<div class="ss-cycle">
+        <div class="ss-cycle-head">
+          <div class="ss-cycle-title">Цикл #${i + 1}</div>
+          <div class="ss-cycle-meta">${fmtDate(c.dt_start)} → ${fmtDate(c.dt_end)} · ${c.duration_years} лет${flag}</div>
+        </div>
+        <div class="ss-timeline">${segs}</div>
+        <div class="ss-eps">${rows}</div>
+      </div>`;
+    }).join("");
+    return `<section><h2>Циклы Сади Сати</h2><div class="card">${inner}</div></section>`;
+  }
+
+  function renderShani(title: string, sign: any, periods: any[], currentEp: any) {
+    if (!periods.length) return "";
+    const rows = periods.map((ep: any) => {
+      const cur = currentEp && ep.dt_start === currentEp.dt_start;
+      return `<div class="ss-shani-row ${cur ? "current" : ""}">
+        <div>${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)} ${cur ? '<span class="ss-badge">сейчас</span>' : ""}</div>
+        <div class="when">${Math.round(ep.duration_days)} дн</div>
+      </div>`;
+    }).join("");
+    return `<section><h2>${title} · знак ${sign.sign_ru}</h2><div class="card"><div class="ss-shani">${rows}</div></div></section>`;
+  }
+</script>

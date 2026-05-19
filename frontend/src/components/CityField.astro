@@ -1,0 +1,174 @@
+---
+// Поле поиска города с автодополнением через Nominatim.
+// Использование: <CityField />
+// При выборе города заполняет input[name="lat"] и input[name="lon"] в ближайшей form.
+// Если в форме есть input[name="tz"], после выбора города или изменения даты
+// дёргает /api/tz и подставляет исторический offset (с учётом DST/декретного времени).
+const API = "https://vedic-api-production-626f.up.railway.app";
+---
+
+<div class="field field--city">
+  <label>Город</label>
+  <div class="city-wrap">
+    <input type="text" class="city-input" autocomplete="off" placeholder="Москва, Мумбаи, Нью-Йорк…" value="Ставрополь" />
+    <ul class="city-dropdown"></ul>
+    <div class="tz-hint" data-role="tz-hint"></div>
+  </div>
+</div>
+
+<style>
+  .field--city { flex: 1 1 100%; max-width: 100%; width: 100%; }
+  .city-wrap { position: relative; width: 100%; }
+
+  .city-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: #f5f5f7;
+    font-size: 15px;
+    font-family: inherit;
+    color: #1d1d1f;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+  .city-input:focus { box-shadow: 0 0 0 3px rgba(0,113,227,0.25); }
+
+  .city-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    list-style: none;
+    overflow: hidden;
+    z-index: 50;
+  }
+  .city-dropdown.open { display: block; }
+
+  .tz-hint {
+    font-size: 12px;
+    color: #6e6e73;
+    margin-top: 6px;
+    min-height: 1em;
+  }
+  .tz-hint.warn { color: #c08a30; }
+</style>
+
+<style is:global>
+  .city-dropdown li {
+    padding: 11px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #1d1d1f;
+  }
+  .city-dropdown li + li { border-top: 1px solid #e8e8ed; }
+  .city-dropdown li:hover { background: #f5f5f7; }
+  .city-dropdown li .city-name { font-weight: 500; }
+  .city-dropdown li .city-sub { color: #6e6e73; font-size: 12px; margin-top: 2px; }
+</style>
+
+<script>
+  const API = "https://vedic-api-production-626f.up.railway.app";
+
+  document.querySelectorAll<HTMLElement>(".city-wrap").forEach((wrap) => {
+    const input = wrap.querySelector<HTMLInputElement>(".city-input")!;
+    const dropdown = wrap.querySelector<HTMLUListElement>(".city-dropdown")!;
+    const hintEl = wrap.querySelector<HTMLDivElement>('[data-role="tz-hint"]')!;
+    const form = wrap.closest("form")!;
+    const tzInput = form.elements.namedItem("tz") as HTMLInputElement | null;
+    const dateInput = form.elements.namedItem("date") as HTMLInputElement | null;
+    const timeInput = form.elements.namedItem("time") as HTMLInputElement | null;
+
+    let timer: ReturnType<typeof setTimeout>;
+
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(() => search(q), 400);
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target as Node)) close();
+    });
+
+    // При изменении даты — пересчитываем tz (исторические переходы могут менять offset)
+    dateInput?.addEventListener("change", refreshTz);
+
+    async function search(q: string) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`;
+        const data = await (await fetch(url, { headers: { "Accept-Language": "ru" } })).json();
+        render(data);
+      } catch { close(); }
+    }
+
+    function render(items: any[]) {
+      if (!items.length) { close(); return; }
+      dropdown.innerHTML = items.map((item) => {
+        const name = item.name || item.display_name.split(",")[0];
+        const sub  = item.display_name.split(",").slice(1, 3).join(",").trim();
+        return `<li data-lat="${item.lat}" data-lon="${item.lon}">
+          <div class="city-name">${name}</div>
+          <div class="city-sub">${sub}</div>
+        </li>`;
+      }).join("");
+      dropdown.classList.add("open");
+
+      dropdown.querySelectorAll<HTMLLIElement>("li").forEach((li) => {
+        li.addEventListener("click", () => {
+          (form.elements.namedItem("lat") as HTMLInputElement).value = parseFloat(li.dataset.lat!).toFixed(4);
+          (form.elements.namedItem("lon") as HTMLInputElement).value = parseFloat(li.dataset.lon!).toFixed(4);
+          input.value = li.querySelector(".city-name")!.textContent!;
+          close();
+          refreshTz();
+        });
+      });
+    }
+
+    function close() {
+      dropdown.classList.remove("open");
+      dropdown.innerHTML = "";
+    }
+
+    async function refreshTz() {
+      if (!tzInput) return;
+      const lat = parseFloat((form.elements.namedItem("lat") as HTMLInputElement)?.value);
+      const lon = parseFloat((form.elements.namedItem("lon") as HTMLInputElement)?.value);
+      if (!lat || !lon) return;
+
+      // Дату берём либо из input[type=date], либо собираем из date+time
+      let year = new Date().getFullYear(), month = 1, day = 1, hour = 12, minute = 0;
+      if (dateInput?.value) {
+        const [y, m, d] = dateInput.value.split("-").map(Number);
+        year = y; month = m; day = d;
+      }
+      if (timeInput?.value) {
+        const [h, mi] = timeInput.value.split(":").map(Number);
+        hour = h; minute = mi;
+      }
+
+      hintEl.classList.remove("warn");
+      hintEl.textContent = "Определяем часовой пояс…";
+      try {
+        const url = `${API}/api/tz?lat=${lat}&lon=${lon}&year=${year}&month=${month}&day=${day}&hour=${hour}&minute=${minute}`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
+        const d = await r.json();
+        tzInput.value = String(d.offset_hours);
+        const dst = d.is_dst ? " · летнее время" : "";
+        hintEl.textContent = `${d.tz_name} → ${d.offset_str}${dst}`;
+      } catch (e: any) {
+        hintEl.classList.add("warn");
+        hintEl.textContent = "Не удалось определить TZ: " + e.message;
+      }
+    }
+
+    // Первая попытка при загрузке (если уже есть lat/lon)
+    refreshTz();
+  });
+</script>
