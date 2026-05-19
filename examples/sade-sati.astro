@@ -1,0 +1,467 @@
+---
+// Скопируйте этот файл в src/pages/sade-sati.astro вашего Astro-проекта.
+// API URL берётся из переменной окружения PUBLIC_API_URL (например,
+// PUBLIC_API_URL=https://vedic-api.up.railway.app). Если не задана —
+// используется относительный путь "" (если фронт и API на одном домене).
+const API_URL = import.meta.env.PUBLIC_API_URL ?? "";
+---
+
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Сади Сати — калькулятор</title>
+  <style>
+    :root {
+      --bg:        #0e1117;
+      --panel:     #161b22;
+      --panel-2:   #1f262f;
+      --border:    #2a3038;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #d4a373;
+      --aarohini:  #f5a623;
+      --madhya:    #d0454c;
+      --avarohini: #6cbf6c;
+      --ashtama:   #7d6cbf;
+      --kantaka:   #4a90e2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+    h1 { margin: 0 0 8px; font-weight: 600; font-size: 28px; }
+    h2 { margin: 24px 0 12px; font-size: 18px; font-weight: 600; color: var(--accent); }
+    .lede { color: var(--muted); margin-bottom: 24px; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
+    input {
+      margin-top: 4px;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+
+    button {
+      margin-top: 16px;
+      background: var(--accent);
+      color: #1a1310;
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error { color: #ff7a7a; margin-top: 12px; font-size: 14px; }
+
+    .natal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .stat { background: var(--panel-2); padding: 10px 12px; border-radius: 6px; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 16px; margin-top: 2px; }
+
+    .boundary-warn {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(245, 166, 35, 0.1);
+      border: 1px solid rgba(245, 166, 35, 0.3);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .now-card {
+      border-left: 4px solid var(--madhya);
+      padding-left: 16px;
+    }
+    .now-card .phase-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #1a1310;
+    }
+    .progress {
+      margin-top: 8px;
+      height: 6px;
+      background: var(--panel-2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill { height: 100%; background: var(--madhya); }
+
+    .cycle { margin-bottom: 20px; }
+    .cycle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .cycle-title { font-weight: 600; }
+    .cycle-meta { color: var(--muted); font-size: 13px; }
+
+    .timeline {
+      display: flex;
+      height: 36px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: rgba(0,0,0,0.75);
+      font-weight: 600;
+      overflow: hidden;
+      white-space: nowrap;
+      cursor: default;
+    }
+    .seg-aarohini  { background: var(--aarohini); }
+    .seg-madhya    { background: var(--madhya); color: #fff; }
+    .seg-avarohini { background: var(--avarohini); }
+
+    .ep-list {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .ep-list-row {
+      display: grid;
+      grid-template-columns: 110px 1fr auto;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .ep-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #1a1310;
+    }
+    .tag-aarohini  { background: var(--aarohini); }
+    .tag-madhya    { background: var(--madhya); color: #fff; }
+    .tag-avarohini { background: var(--avarohini); }
+
+    .shani-list { display: grid; gap: 6px; }
+    .shani-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      padding: 8px 12px;
+      background: var(--panel-2);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .shani-row.current {
+      border-left: 3px solid var(--accent);
+      background: rgba(212, 163, 115, 0.08);
+    }
+    .shani-row .when { color: var(--muted); }
+
+    .badge-active {
+      display: inline-block;
+      padding: 2px 6px;
+      background: var(--accent);
+      color: #1a1310;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .hidden { display: none; }
+    .loading { color: var(--muted); padding: 16px 0; }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <h1>Сади Сати</h1>
+  <p class="lede">
+    Транзит Сатурна через три знака вокруг натальной Луны (~7,5 лет).
+    Параллельно показываем Аштама и Кантака Шани.
+  </p>
+
+  <form id="ss-form" class="card">
+    <div class="form-grid">
+      <label>Год <input name="year" type="number" required value="1990" min="600" max="2400"/></label>
+      <label>Месяц <input name="month" type="number" required value="5" min="1" max="12"/></label>
+      <label>День <input name="day" type="number" required value="17" min="1" max="31"/></label>
+      <label>Час <input name="hour" type="number" required value="14" min="0" max="23"/></label>
+      <label>Минута <input name="minute" type="number" required value="30" min="0" max="59"/></label>
+      <label>UTC ±, ч <input name="tz" type="number" required value="3" step="0.5"/></label>
+      <label>Широта <input name="lat" type="number" required value="55.7558" step="0.0001"/></label>
+      <label>Долгота <input name="lon" type="number" required value="37.6173" step="0.0001"/></label>
+    </div>
+    <button type="submit" id="submit-btn">Рассчитать</button>
+    <div class="error hidden" id="error-msg"></div>
+  </form>
+
+  <div id="result" class="hidden"></div>
+  <div id="loading" class="loading hidden">Считаем 120 лет транзитов Сатурна…</div>
+</div>
+
+<script define:vars={{ API_URL }}>
+  const form     = document.getElementById("ss-form");
+  const btn      = document.getElementById("submit-btn");
+  const errEl    = document.getElementById("error-msg");
+  const resEl    = document.getElementById("result");
+  const loadEl   = document.getElementById("loading");
+
+  const PHASE_RU = { Aarohini: "Aarohini", Madhya: "Madhya (пик)", Avarohini: "Avarohini" };
+  const PHASE_CLASS = { Aarohini: "aarohini", Madhya: "madhya", Avarohini: "avarohini" };
+
+  function fmtDate(s) {
+    if (!s) return "";
+    const d = new Date(s);
+    if (isNaN(d)) return s;
+    return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  function fmtYears(days) {
+    if (days < 365) return `${Math.round(days)} дн`;
+    const y = Math.floor(days / 365.25);
+    const m = Math.round((days - y * 365.25) / 30.44);
+    return m === 0 ? `${y} г` : `${y} г ${m} мес`;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errEl.classList.add("hidden");
+    resEl.classList.add("hidden");
+    loadEl.classList.remove("hidden");
+    btn.disabled = true;
+
+    const fd = new FormData(form);
+    const payload = {
+      year:   +fd.get("year"),
+      month:  +fd.get("month"),
+      day:    +fd.get("day"),
+      hour:   +fd.get("hour"),
+      minute: +fd.get("minute"),
+      tz:     +fd.get("tz"),
+      lat:    +fd.get("lat"),
+      lon:    +fd.get("lon"),
+    };
+
+    try {
+      const r = await fetch(`${API_URL}/api/sade-sati`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) {
+        const detail = await r.json().catch(() => ({}));
+        throw new Error(detail.detail || `HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      render(data);
+    } catch (err) {
+      errEl.textContent = "Ошибка: " + err.message;
+      errEl.classList.remove("hidden");
+    } finally {
+      loadEl.classList.add("hidden");
+      btn.disabled = false;
+    }
+  });
+
+  function render(d) {
+    const parts = [];
+    parts.push(renderNatal(d));
+    parts.push(renderCurrent(d));
+    parts.push(renderCycles(d));
+    parts.push(renderShani("Аштама Шани", d.ashtama_sign, d.ashtama_shani_periods, d.current.ashtama_shani, "ashtama"));
+    parts.push(renderShani("Кантака Шани", d.kantaka_sign, d.kantaka_shani_periods, d.current.kantaka_shani, "kantaka"));
+    resEl.innerHTML = parts.join("");
+    resEl.classList.remove("hidden");
+  }
+
+  function renderNatal(d) {
+    const n = d.natal_moon;
+    const b = n.boundary;
+    let warn = "";
+    if (b.topo_applied) {
+      warn = `<div class="boundary-warn">
+        Луна находилась в ${b.dist_to_boundary_deg}° от границы знака — применён топоцентрический расчёт
+        (поправка ${b.delta_arcsec}″).
+        ${b.sign_changed_by_topo ? "<b>Знак изменился относительно геоцентрического!</b>" : "Знак не изменился."}
+      </div>`;
+    } else if (b.near_boundary) {
+      warn = `<div class="boundary-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы знака. lat/lon не указаны — не смогли применить топоцентрику.
+      </div>`;
+    }
+    return `
+      <h2>Натальная Луна</h2>
+      <div class="card">
+        <div class="natal-grid">
+          <div class="stat">
+            <div class="stat-label">Знак (раши)</div>
+            <div class="stat-value">${n.sign_ru} <span style="color:var(--muted)">(${n.sign})</span></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Градус в знаке</div>
+            <div class="stat-value">${n.deg_in_sign_dms}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Накшатра</div>
+            <div class="stat-value">${n.nakshatra_ru} · пада ${n.pada}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Управитель</div>
+            <div class="stat-value">${n.nk_lord}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Фрейм</div>
+            <div class="stat-value">${n.frame === "topocentric" ? "топоцентрический" : "геоцентрический"}</div>
+          </div>
+        </div>
+        ${warn}
+      </div>
+    `;
+  }
+
+  function renderCurrent(d) {
+    const c = d.current;
+    if (!c.sade_sati && !c.ashtama_shani && !c.kantaka_shani) {
+      return `
+        <h2>Сейчас</h2>
+        <div class="card">
+          <div style="color:var(--muted)">Сейчас ни один период не активен.</div>
+        </div>
+      `;
+    }
+    const blocks = [];
+    if (c.sade_sati) {
+      const ph = c.sade_sati.phase;
+      const cls = PHASE_CLASS[ph] || "madhya";
+      blocks.push(`
+        <div class="now-card" style="border-color: var(--${cls})">
+          <div>
+            <span class="phase-tag tag-${cls}" style="background: var(--${cls})">САДИ САТИ · ${PHASE_RU[ph]}</span>
+          </div>
+          <div style="margin-top:8px; font-size: 16px">
+            Сатурн в знаке <b>${c.sade_sati.sign_ru}</b>
+          </div>
+          <div style="color:var(--muted); font-size: 13px; margin-top: 4px">
+            ${fmtDate(c.sade_sati.dt_start)} → ${fmtDate(c.sade_sati.dt_end)}
+            · осталось ${fmtYears(c.sade_sati.days_remaining)}
+          </div>
+          <div class="progress"><div class="progress-fill" style="width: ${c.sade_sati.progress * 100}%; background: var(--${cls})"></div></div>
+        </div>
+      `);
+    }
+    if (c.ashtama_shani) {
+      blocks.push(`
+        <div class="now-card" style="border-color: var(--ashtama); margin-top: 16px">
+          <div><span class="phase-tag" style="background: var(--ashtama); color:#fff">АШТАМА ШАНИ</span></div>
+          <div style="margin-top:8px">Сатурн в ${c.ashtama_shani.sign_ru} · осталось ${fmtYears(c.ashtama_shani.days_remaining)}</div>
+        </div>
+      `);
+    }
+    if (c.kantaka_shani) {
+      blocks.push(`
+        <div class="now-card" style="border-color: var(--kantaka); margin-top: 16px">
+          <div><span class="phase-tag" style="background: var(--kantaka); color:#fff">КАНТАКА ШАНИ</span></div>
+          <div style="margin-top:8px">Сатурн в ${c.kantaka_shani.sign_ru} · осталось ${fmtYears(c.kantaka_shani.days_remaining)}</div>
+        </div>
+      `);
+    }
+    return `<h2>Сейчас</h2><div class="card">${blocks.join("")}</div>`;
+  }
+
+  function renderCycles(d) {
+    if (!d.sade_sati_cycles.length) return "";
+    const cycles = d.sade_sati_cycles.map((c, i) => {
+      const cycleStart = new Date(c.episodes[0].dt_start).getTime();
+      const cycleEnd   = new Date(c.episodes[c.episodes.length - 1].dt_end).getTime();
+      const total = cycleEnd - cycleStart;
+
+      const segs = c.episodes.map(ep => {
+        const epStart = new Date(ep.dt_start).getTime();
+        const epEnd   = new Date(ep.dt_end).getTime();
+        const w = total > 0 ? ((epEnd - epStart) / total) * 100 : 0;
+        const cls = PHASE_CLASS[ep.phase] || "madhya";
+        return `<div class="seg seg-${cls}" style="width: ${w}%" title="${ep.phase} · ${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}">${w > 8 ? ep.phase : ""}</div>`;
+      }).join("");
+
+      const rows = c.episodes.map(ep => `
+        <div class="ep-list-row">
+          <span class="ep-tag tag-${PHASE_CLASS[ep.phase]}">${ep.phase}</span>
+          <span>${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}</span>
+          <span>${Math.round(ep.duration_days)} дн</span>
+        </div>
+      `).join("");
+
+      let flag = "";
+      if (c.truncated_start) flag += " · начало до даты рождения";
+      if (c.truncated_end)   flag += " · конец вне окна поиска";
+
+      return `
+        <div class="cycle">
+          <div class="cycle-header">
+            <div class="cycle-title">Цикл #${i + 1}</div>
+            <div class="cycle-meta">${fmtDate(c.dt_start)} → ${fmtDate(c.dt_end)} · ${c.duration_years} лет${flag}</div>
+          </div>
+          <div class="timeline">${segs}</div>
+          <div class="ep-list">${rows}</div>
+        </div>
+      `;
+    }).join("");
+    return `<h2>Циклы Сади Сати</h2><div class="card">${cycles}</div>`;
+  }
+
+  function renderShani(title, sign, periods, currentEp, kind) {
+    if (!periods.length) return "";
+    const rows = periods.map(ep => {
+      const isCurrent = currentEp && ep.dt_start === currentEp.dt_start;
+      return `
+        <div class="shani-row ${isCurrent ? "current" : ""}">
+          <div>${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)} ${isCurrent ? '<span class="badge-active">сейчас</span>' : ""}</div>
+          <div class="when">${Math.round(ep.duration_days)} дн</div>
+        </div>
+      `;
+    }).join("");
+    return `
+      <h2>${title} · знак ${sign.sign_ru}</h2>
+      <div class="card">
+        <div class="shani-list">${rows}</div>
+      </div>
+    `;
+  }
+</script>
+
+</body>
+</html>

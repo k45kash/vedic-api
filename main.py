@@ -8,10 +8,13 @@ FastAPI сервер для ведической астрологии.
     http://localhost:8000/docs
 """
 
+import os
 from datetime import date
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from Panchangam import calc_panchang
@@ -77,9 +80,18 @@ class SadeSatiRequest(BaseModel):
 
 # ─── Эндпоинты ──────────────────────────────────────────────────────────────
 
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 @app.get("/")
 def root():
     return {"status": "ok", "message": "Vedic Astrology API работает"}
+
+
+@app.get("/sade-sati")
+def sade_sati_page():
+    return FileResponse(os.path.join(STATIC_DIR, "sade-sati.html"))
 
 
 @app.get("/api/debug")

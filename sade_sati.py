@@ -63,6 +63,11 @@ SEARCH_STEP_DAYS = 2.0
 # 5 лет — безопасный порог разделения.
 CYCLE_GAP_DAYS = 365.25 * 5
 
+# Топоцентрический параллакс Луны достигает ~1°. Если Луна ближе 1° к границе
+# знака — пересчитываем топоцентрически: для пограничных рождений знак может
+# поменяться, что развернёт весь Сади Сати.
+BOUNDARY_CHECK_DEG = 1.0
+
 # ═══════════════════════════════════════════════════════════
 #  АСТРОНОМИЯ
 # ═══════════════════════════════════════════════════════════
@@ -84,30 +89,78 @@ def saturn_sign(jd: float) -> int:
     return int(saturn_sid(jd) / 30) + 1
 
 
-def moon_natal(jd: float) -> dict:
-    """Натальная Луна: знак, сидерическая долгота, накшатра, пада."""
-    aya = get_aya(jd)
-    pos, _ = swe.calc_ut(jd, swe.MOON, swe.FLG_SWIEPH)
-    sid = (pos[0] - aya) % 360
-    sign_num    = int(sid / 30) + 1
-    deg_in_sign = sid % 30
-    nk_idx      = int(sid / NK_SIZE) % 27
-    pada        = int((sid % NK_SIZE) / (NK_SIZE / 4)) + 1
+def _moon_sid_at(jd: float, aya: float, topo: bool,
+                 lat: float, lon: float) -> float:
+    """Сидерическая долгота Луны: гео- или топоцентрическая."""
+    fl = swe.FLG_SWIEPH
+    if topo:
+        swe.set_topo(lon, lat, 0)
+        fl |= swe.FLG_TOPOCTR
+    pos, _ = swe.calc_ut(jd, swe.MOON, fl)
+    return (pos[0] - aya) % 360
+
+
+def moon_natal(jd: float, lat: float = 0.0, lon: float = 0.0) -> dict:
+    """Натальная Луна: знак, сидерическая долгота, накшатра, пада.
+
+    На границе знака (<1°) пересчитывает топоцентрически и, если знак меняется,
+    использует топоцентрический результат — для Сади Сати это критично, так как
+    весь расчёт строится от знака Луны.
+    """
+    aya     = get_aya(jd)
+    sid_geo = _moon_sid_at(jd, aya, topo=False, lat=lat, lon=lon)
+
+    sign_geo    = int(sid_geo / 30) + 1
+    pos_in_sign = sid_geo % 30
+    dist_bound  = min(pos_in_sign, 30 - pos_in_sign)
+
+    use_topo = False
+    boundary = {
+        "near_boundary":         dist_bound < BOUNDARY_CHECK_DEG,
+        "dist_to_boundary_deg":  round(dist_bound, 4),
+        "topo_applied":          False,
+        "sign_changed_by_topo":  False,
+    }
+
+    if boundary["near_boundary"] and (lat != 0.0 or lon != 0.0):
+        sid_topo  = _moon_sid_at(jd, aya, topo=True, lat=lat, lon=lon)
+        sign_topo = int(sid_topo / 30) + 1
+        boundary.update({
+            "topo_applied":         True,
+            "geo_sid":              round(sid_geo, 6),
+            "topo_sid":             round(sid_topo, 6),
+            "delta_arcsec":         round((sid_topo - sid_geo) * 3600, 2),
+            "geo_sign_num":         sign_geo,
+            "topo_sign_num":        sign_topo,
+            "sign_changed_by_topo": sign_topo != sign_geo,
+        })
+        use_topo = True
+        sid_final  = sid_topo
+        sign_final = sign_topo
+    else:
+        sid_final  = sid_geo
+        sign_final = sign_geo
+
+    deg_in_sign = sid_final % 30
+    nk_idx      = int(sid_final / NK_SIZE) % 27
+    pada        = int((sid_final % NK_SIZE) / (NK_SIZE / 4)) + 1
     nk = NAKSHATRAS[nk_idx]
-    s  = SIGNS[sign_num - 1]
+    s  = SIGNS[sign_final - 1]
     return {
-        "sign_num":        sign_num,
+        "sign_num":        sign_final,
         "sign":            s["name"],
         "sign_ru":         s["ru"],
         "sign_lord":       s["lord"],
-        "sid":             round(sid, 6),
-        "sid_dms":         dms(sid),
+        "sid":             round(sid_final, 6),
+        "sid_dms":         dms(sid_final),
         "deg_in_sign":     round(deg_in_sign, 6),
         "deg_in_sign_dms": dms_sign(deg_in_sign),
         "nakshatra":       nk["name"],
         "nakshatra_ru":    nk["ru"],
         "pada":            pada,
         "nk_lord":         nk["lord"],
+        "frame":           "topocentric" if use_topo else "geocentric",
+        "boundary":        boundary,
     }
 
 # ═══════════════════════════════════════════════════════════
@@ -228,7 +281,7 @@ def calc_sade_sati(
     birth_dt = datetime(year, month, day, hour, minute)
     jd_birth = dt_to_jd(birth_dt) - tz / 24.0
 
-    natal = moon_natal(jd_birth)
+    natal = moon_natal(jd_birth, lat=lat, lon=lon)
     m = natal["sign_num"]
 
     # Знаки относительно натальной Луны
@@ -264,6 +317,9 @@ def calc_sade_sati(
 
     cycles = group_sade_sati_cycles(sade_sati_eps)
 
+    jd_now = dt_to_jd(datetime.utcnow())
+    current = _current_status(cycles, ashtama_eps, kantaka_eps, jd_now, tz)
+
     def _sign_info(n: int) -> dict:
         s = SIGNS[n - 1]
         return {"sign_num": n, "sign": s["name"], "sign_ru": s["ru"], "lord": s["lord"]}
@@ -289,7 +345,54 @@ def calc_sade_sati(
         "sade_sati_cycles":      cycles,
         "ashtama_shani_periods": ashtama_eps,
         "kantaka_shani_periods": kantaka_eps,
+        "current":               current,
         "method": "Swiss Ephemeris (DE431) + Lahiri ayanamsha",
+    }
+
+
+def _current_episode(eps: list, jd_now: float, tz: float) -> Optional[dict]:
+    for ep in eps:
+        if ep["jd_start"] <= jd_now < ep["jd_end"]:
+            total = ep["jd_end"] - ep["jd_start"]
+            done  = jd_now - ep["jd_start"]
+            return {
+                "phase":           ep.get("phase"),
+                "sign":            ep["sign"],
+                "sign_ru":         ep["sign_ru"],
+                "sign_num":        ep["sign_num"],
+                "dt_start":        ep["dt_start"],
+                "dt_end":          ep["dt_end"],
+                "days_remaining":  round(ep["jd_end"] - jd_now, 1),
+                "days_elapsed":    round(done, 1),
+                "progress":        round(done / total, 3) if total > 0 else 0,
+            }
+    return None
+
+
+def _current_status(cycles: list, ashtama: list, kantaka: list,
+                    jd_now: float, tz: float) -> dict:
+    sade = None
+    cycle_info = None
+    for c in cycles:
+        ep = _current_episode(c["episodes"], jd_now, tz)
+        if ep:
+            sade = ep
+            cycle_total = c["jd_end"] if "jd_end" in c else c["episodes"][-1]["jd_end"]
+            cycle_start = c["episodes"][0]["jd_start"]
+            cycle_info = {
+                "dt_start":       c["dt_start"],
+                "dt_end":         c["dt_end"],
+                "duration_years": c["duration_years"],
+                "days_remaining": round(c["episodes"][-1]["jd_end"] - jd_now, 1),
+            }
+            break
+
+    return {
+        "as_of":         jd_to_local(jd_now, tz),
+        "sade_sati":     sade,
+        "sade_sati_cycle": cycle_info,
+        "ashtama_shani": _current_episode(ashtama, jd_now, tz),
+        "kantaka_shani": _current_episode(kantaka, jd_now, tz),
     }
 
 # ═══════════════════════════════════════════════════════════
