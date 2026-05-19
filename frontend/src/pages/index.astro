@@ -1,0 +1,482 @@
+---
+import Layout from "../layouts/Layout.astro";
+import CityField from "../components/CityField.astro";
+---
+
+<Layout title="Накшатра">
+  <h1>Накшатра</h1>
+  <p class="subtitle">Накшатра, лагна и положение планет по дате рождения</p>
+
+  <form id="form">
+    <div class="row">
+      <div class="field">
+        <label>Дата рождения</label>
+        <input type="date" name="date" required />
+      </div>
+      <div class="field">
+        <label>Время</label>
+        <input type="time" name="time" required />
+      </div>
+    </div>
+    <div class="row">
+      <CityField />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Широта</label>
+        <input type="number" name="lat" step="0.0001" value="45.0428" required />
+      </div>
+      <div class="field">
+        <label>Долгота</label>
+        <input type="number" name="lon" step="0.0001" value="41.9734" required />
+      </div>
+      <div class="field">
+        <label>Часовой пояс (UTC±)</label>
+        <input type="number" name="tz" step="0.5" value="3" required />
+      </div>
+    </div>
+    <button type="submit">Рассчитать</button>
+  </form>
+
+  <div id="result"></div>
+</Layout>
+
+<style>
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+  .subtitle { margin-top: 6px; font-size: 15px; color: #6e6e73; margin-bottom: 36px; }
+
+  form {
+    background: #fff;
+    border-radius: 18px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  label { font-size: 13px; font-weight: 500; color: #6e6e73; }
+
+  input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    background: #f5f5f7;
+    font-size: 15px;
+    font-family: inherit;
+    color: #1d1d1f;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+  input:focus { box-shadow: 0 0 0 3px rgba(0,113,227,0.25); }
+
+  button {
+    align-self: flex-start;
+    padding: 12px 28px;
+    background: #0071e3;
+    color: #fff;
+    border: none;
+    border-radius: 980px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #0077ed; }
+  button:disabled { background: #a1a1a6; cursor: default; }
+
+
+</style>
+
+<!-- Стили для динамически вставляемого HTML должны быть глобальными -->
+<style is:global>
+  #result { margin-top: 32px; }
+
+  .card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+  }
+
+  .card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6e6e73;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 20px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 20px;
+  }
+
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #a1a1a6;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-value {
+    font-size: 17px;
+    font-weight: 500;
+    color: #1d1d1f;
+  }
+
+  .planets-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .planets-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 500;
+    color: #a1a1a6;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0 16px 12px 0;
+  }
+
+  .planets-table td {
+    padding: 11px 16px 11px 0;
+    border-top: 1px solid #f5f5f7;
+    color: #1d1d1f;
+  }
+
+  .planets-table tr:last-child td { border-bottom: 1px solid #f5f5f7; }
+
+  .planet-name { font-weight: 500; }
+
+  .chart-wrap {
+    display: flex;
+    justify-content: center;
+  }
+
+  .lagna-svg {
+    width: 100%;
+    max-width: 380px;
+    height: auto;
+  }
+
+  .chart-house {
+    fill: #fdf8ee;
+    stroke: #1d1d1f;
+    stroke-width: 1.5;
+  }
+
+  .chart-lagna {
+    fill: #fff8e1;
+  }
+
+  .chart-hnum {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    fill: #a1a1a6;
+  }
+
+  .chart-sign {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 9px;
+    fill: #a1a1a6;
+  }
+
+  .chart-planet {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    fill: #1d1d1f;
+  }
+
+  .boundary-msg {
+    margin-top: 16px;
+    font-size: 13px;
+    color: #6e6e73;
+    padding: 10px 14px;
+    background: #f5f5f7;
+    border-radius: 10px;
+  }
+
+  .house-meaning { color: #6e6e73; font-size: 13px; }
+
+  .error { color: #ff3b30; font-size: 14px; margin-top: 16px; }
+  .loading { color: #6e6e73; font-size: 14px; margin-top: 16px; }
+</style>
+
+<script>
+  const API = "https://vedic-api-production-626f.up.railway.app";
+
+  const form = document.getElementById("form") as HTMLFormElement;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector("button")!;
+    const result = document.getElementById("result")!;
+
+    const dateVal = (form.elements.namedItem("date") as HTMLInputElement).value;
+    const timeVal = (form.elements.namedItem("time") as HTMLInputElement).value;
+    const [year, month, day] = dateVal.split("-").map(Number);
+    const [hour, minute] = timeVal.split(":").map(Number);
+    const lat = parseFloat((form.elements.namedItem("lat") as HTMLInputElement).value);
+    const lon = parseFloat((form.elements.namedItem("lon") as HTMLInputElement).value);
+    const tz = parseFloat((form.elements.namedItem("tz") as HTMLInputElement).value);
+
+    btn.disabled = true;
+    btn.textContent = "Считаем...";
+    result.innerHTML = '<p class="loading">Выполняется расчёт…</p>';
+
+    try {
+      const res = await fetch(`${API}/api/horoscope`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year, month, day, hour, minute, tz, lat, lon }),
+      });
+
+      if (!res.ok) throw new Error((await res.json()).detail);
+      const d = await res.json();
+      result.innerHTML = renderHoroscope(d);
+    } catch (err: any) {
+      result.innerHTML = `<p class="error">Ошибка: ${err.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Рассчитать";
+    }
+  });
+
+  function toDMS(deg: number): string {
+    const d = Math.floor(deg);
+    const mf = (deg - d) * 60;
+    const m = Math.floor(mf);
+    const s = Math.round((mf - m) * 60);
+    return `${d}°${String(m).padStart(2,"0")}'${String(s).padStart(2,"0")}"`;
+  }
+
+  // ── Лагна-чарт (северо-индийский стиль) ──────────────────────
+  function renderChart(d: any): string {
+    // Координаты ключевых точек (viewBox 0 0 400 400, поле от 20 до 380)
+    const TL=[20,20],  TR=[380,20],  BR=[380,380], BL=[20,380];
+    const TC=[200,20], RC=[380,200], BC=[200,380], LC=[20,200];
+    const O =[200,200];
+    const I1=[110,110], I2=[290,110], I3=[290,290], I4=[110,290];
+
+    // Определение 12 домов: [полигон, центр текста, позиция номера дома]
+    // Северо-индийский стиль: 1й дом — верхний ромб, далее против часовой стрелки
+    const houses: { pts: number[][], cx: number, cy: number, nx: number, ny: number }[] = [
+      { pts:[O,I2,TC,I1],  cx:200, cy:100, nx:200, ny:36  }, // H1  top diamond    (Лагна)
+      { pts:[TL,TC,I1],    cx:110, cy:50,  nx:55,  ny:44  }, // H2  top-left upper
+      { pts:[TL,I1,LC],    cx:50,  cy:110, nx:44,  ny:95  }, // H3  top-left lower
+      { pts:[O,I4,LC,I1],  cx:100, cy:200, nx:36,  ny:200 }, // H4  left diamond
+      { pts:[LC,I4,BL],    cx:50,  cy:290, nx:44,  ny:308 }, // H5  bottom-left upper
+      { pts:[I4,BC,BL],    cx:110, cy:352, nx:55,  ny:358 }, // H6  bottom-left lower
+      { pts:[O,I3,BC,I4],  cx:200, cy:302, nx:200, ny:366 }, // H7  bottom diamond
+      { pts:[I3,BR,BC],    cx:293, cy:352, nx:348, ny:358 }, // H8  bottom-right lower
+      { pts:[RC,BR,I3],    cx:352, cy:293, nx:358, ny:308 }, // H9  bottom-right upper
+      { pts:[O,I2,RC,I3],  cx:302, cy:200, nx:366, ny:200 }, // H10 right diamond
+      { pts:[TR,RC,I2],    cx:352, cy:110, nx:358, ny:95  }, // H11 top-right lower
+      { pts:[TC,TR,I2],    cx:293, cy:50,  nx:348, ny:44  }, // H12 top-right upper
+    ];
+
+    // Планеты по домам (короткие аббревиатуры)
+    const abbrs: Record<string,string> = {
+      "Солнце":"Su","Луна":"Mo","Марс":"Ma","Меркурий":"Me",
+      "Юпитер":"Ju","Венера":"Ve","Сатурн":"Sa","Раху":"Ra","Кету":"Ke"
+    };
+    const byHouse: Record<number, string[]> = {};
+    d.planets.filter((p: any) => p.available).forEach((p: any) => {
+      if (!byHouse[p.house]) byHouse[p.house] = [];
+      byHouse[p.house].push(abbrs[p.name] ?? p.name.slice(0,2));
+    });
+
+    // Знаки по домам (сокращённо)
+    const signAbbr: Record<string,string> = {
+      "Овен":"Ari","Телец":"Tau","Близнецы":"Gem","Рак":"Can",
+      "Лев":"Leo","Дева":"Vir","Весы":"Lib","Скорпион":"Sco",
+      "Стрелец":"Sag","Козерог":"Cap","Водолей":"Aqu","Рыбы":"Pis"
+    };
+    const houseSign: Record<number, string> = {};
+    d.lagna.houses?.forEach((h: any) => {
+      houseSign[h.house] = signAbbr[h.sign_ru] ?? h.sign_ru?.slice(0,3) ?? "";
+    });
+
+    const cells = houses.map(({ pts, cx, cy, nx, ny }, i) => {
+      const hNum = i + 1;
+      const planets = byHouse[hNum] ?? [];
+      const sign = houseSign[hNum] ?? "";
+      const isLagna = hNum === 1;
+
+      const polyPts = pts.map(p => p.join(",")).join(" ");
+
+      // Текст планет — разбиваем на строки по 2 штуки
+      const lines: string[] = [];
+      for (let j = 0; j < planets.length; j += 2)
+        lines.push(planets.slice(j, j+2).join(" "));
+
+      const lineHeight = 13;
+      const totalH = lines.length * lineHeight;
+      const startY = cy - totalH / 2 + 6;
+
+      const planetText = lines.map((ln, li) =>
+        `<text x="${cx}" y="${startY + li * lineHeight}" text-anchor="middle" class="chart-planet">${ln}</text>`
+      ).join("");
+
+      // Знак зодиака (маленький, под номером дома)
+      const signText = sign
+        ? `<text x="${nx}" y="${ny + 11}" text-anchor="middle" class="chart-sign">${sign}</text>`
+        : "";
+
+      return `
+        <polygon points="${polyPts}" class="chart-house${isLagna ? " chart-lagna" : ""}"/>
+        <text x="${nx}" y="${ny}" text-anchor="middle" class="chart-hnum">${hNum}</text>
+        ${signText}
+        ${planetText}
+      `;
+    }).join("");
+
+    return `
+      <div class="card">
+        <h2>Лагна-чарт</h2>
+        <div class="chart-wrap">
+          <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" class="lagna-svg">
+            ${cells}
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+  // ─────────────────────────────────────────────────────────────
+
+  function renderHoroscope(d: any): string {
+    // Для каждого дома собираем список планет
+    const planetsByHouse: Record<number, string[]> = {};
+    d.planets.filter((p: any) => p.available).forEach((p: any) => {
+      if (!planetsByHouse[p.house]) planetsByHouse[p.house] = [];
+      planetsByHouse[p.house].push(`${p.abbr}${p.name}`);
+    });
+
+    // Процент до границы накшатры
+    const boundaryPct = d.boundary?.dist_deg != null
+      ? ((d.boundary.dist_deg / (360/27)) * 100).toFixed(1)
+      : null;
+    const boundaryMsg = d.boundary?.is_boundary
+      ? `⚠️ Луна на границе накшатры (${d.boundary.dist_arcsec?.toFixed(0)}")`
+      : boundaryPct
+        ? `Луна устойчиво в накшатре (${d.boundary.dist_deg?.toFixed(3)}° = ${boundaryPct}% до границы)`
+        : "";
+
+    return `
+      <div class="card">
+        <h2>Луна</h2>
+        <div class="grid">
+          <div class="stat"><span class="stat-label">Julian Day</span><span class="stat-value">${d.jd?.toFixed(5)}</span></div>
+          <div class="stat"><span class="stat-label">Аянамша Лахири</span><span class="stat-value">${d.aya?.toFixed(4)}°</span></div>
+          <div class="stat"><span class="stat-label">Луна тропическая</span><span class="stat-value">${d.moon_trop != null ? d.moon_trop.toFixed(4) + '°' : '—'}</span></div>
+          <div class="stat"><span class="stat-label">Луна сидерическая</span><span class="stat-value">${d.moon_dms}</span></div>
+          <div class="stat"><span class="stat-label">Метод</span><span class="stat-value">${d.method ?? '—'}</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Накшатра Луны</h2>
+        <div class="grid">
+          <div class="stat"><span class="stat-label">Накшатра</span><span class="stat-value">#${d.nk.num} ${d.nk.name} (${d.nk.ru})</span></div>
+          <div class="stat"><span class="stat-label">Пада</span><span class="stat-value">${d.nk.pada} / 4</span></div>
+          <div class="stat"><span class="stat-label">Владелец</span><span class="stat-value">${d.nk.lord}</span></div>
+          <div class="stat"><span class="stat-label">Символ</span><span class="stat-value">${d.nk.symbol ?? '—'}</span></div>
+          <div class="stat"><span class="stat-label">Гана</span><span class="stat-value">${d.nk.gana}</span></div>
+          <div class="stat"><span class="stat-label">Внутри накшатры</span><span class="stat-value">${d.nk.degrees_in_nakshatra != null ? toDMS(d.nk.degrees_in_nakshatra) : '—'}</span></div>
+        </div>
+        ${boundaryMsg ? `<p class="boundary-msg">${boundaryMsg}</p>` : ''}
+      </div>
+
+      <div class="card">
+        <h2>Лагна (Асцендент)</h2>
+        <div class="grid">
+          <div class="stat"><span class="stat-label">Лагна сидерическая</span><span class="stat-value">${d.lagna.asc_dms}</span></div>
+          <div class="stat"><span class="stat-label">Знак Лагны</span><span class="stat-value">#${d.lagna.sign_num} ${d.lagna.sign} (${d.lagna.sign_ru})</span></div>
+          <div class="stat"><span class="stat-label">Владелец</span><span class="stat-value">${d.lagna.lord}</span></div>
+          <div class="stat"><span class="stat-label">Стихия</span><span class="stat-value">${d.lagna.element}</span></div>
+          <div class="stat"><span class="stat-label">Градусов в знаке</span><span class="stat-value">${d.lagna.deg_in_sign_dms ?? '—'}</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Планеты</h2>
+        <table class="planets-table">
+          <thead>
+            <tr>
+              <th>Планета</th>
+              <th>Знак</th>
+              <th>°</th>
+              <th>Дом</th>
+              <th>Накшатра</th>
+              <th>Пада</th>
+              <th>Владелец накш.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.planets.filter((p: any) => p.available).map((p: any) => `
+              <tr>
+                <td class="planet-name">${p.abbr ?? ''} ${p.name}</td>
+                <td>${p.sign_ru}</td>
+                <td>${p.deg_in_sign != null ? toDMS(p.deg_in_sign) : '—'}</td>
+                <td>${p.house}</td>
+                <td>${p.nakshatra_ru}</td>
+                <td>${p.pada}</td>
+                <td>${p.nk_lord ?? '—'}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      ${renderChart(d)}
+
+      <div class="card">
+        <h2>12 Домов (Whole Sign)</h2>
+        <table class="planets-table">
+          <thead>
+            <tr>
+              <th>Дом</th>
+              <th>Знак</th>
+              <th>Владелец</th>
+              <th>Планеты</th>
+              <th>Значение</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.lagna.houses?.map((h: any) => `
+              <tr>
+                <td>${h.house}</td>
+                <td>${h.sign_ru}</td>
+                <td>${h.lord}</td>
+                <td>${(planetsByHouse[h.house] ?? []).join(', ') || '—'}</td>
+                <td class="house-meaning">${h.meaning ?? '—'}</td>
+              </tr>
+            `).join("") ?? ''}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+</script>
