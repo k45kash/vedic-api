@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ведическая астрология</title>
+  <style>
+    :root {
+      --bg:        #0e1117;
+      --panel:     #161b22;
+      --panel-2:   #1f262f;
+      --border:    #2a3038;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #d4a373;
+      --accent-2:  #b08458;
+      --aarohini:  #f5a623;
+      --madhya:    #d0454c;
+      --avarohini: #6cbf6c;
+      --ashtama:   #7d6cbf;
+      --kantaka:   #4a90e2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+
+    header { margin-bottom: 20px; }
+    h1 { margin: 0 0 8px; font-size: 24px; font-weight: 600; }
+    h2 { margin: 24px 0 12px; font-size: 18px; font-weight: 600; color: var(--accent); }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-top: 16px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    .tab { display: none; }
+    .tab.active { display: block; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
+    input, select {
+      margin-top: 4px;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    input[readonly] { color: var(--muted); cursor: not-allowed; }
+
+    .tz-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .tz-row label { flex: 1; }
+    .tz-mode {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      height: 36px;
+      margin-top: 4px;
+    }
+    .tz-mode button {
+      background: var(--panel-2);
+      color: var(--muted);
+      border: 0;
+      padding: 0 10px;
+      font-size: 11px;
+      cursor: pointer;
+      margin: 0;
+      border-radius: 0;
+    }
+    .tz-mode button.active {
+      background: var(--accent);
+      color: #1a1310;
+    }
+    .tz-hint { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 1em; }
+    .tz-hint.warn { color: var(--aarohini); }
+
+    button.primary {
+      margin-top: 16px;
+      background: var(--accent);
+      color: #1a1310;
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button.primary:hover { filter: brightness(1.08); }
+    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error { color: #ff7a7a; margin-top: 12px; font-size: 14px; }
+    .loading { color: var(--muted); padding: 16px 0; }
+    .hidden { display: none; }
+
+    /* стат-карточки */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .stat { background: var(--panel-2); padding: 10px 12px; border-radius: 6px; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 16px; margin-top: 2px; }
+
+    .boundary-warn {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(245, 166, 35, 0.1);
+      border: 1px solid rgba(245, 166, 35, 0.3);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    /* Сади Сати-специфичное */
+    .now-card { border-left: 4px solid var(--madhya); padding-left: 16px; }
+    .now-card .phase-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #1a1310;
+    }
+    .progress {
+      margin-top: 8px;
+      height: 6px;
+      background: var(--panel-2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill { height: 100%; background: var(--madhya); }
+
+    .cycle { margin-bottom: 20px; }
+    .cycle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .cycle-title { font-weight: 600; }
+    .cycle-meta { color: var(--muted); font-size: 13px; }
+
+    .timeline {
+      display: flex;
+      height: 36px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: rgba(0,0,0,0.75);
+      font-weight: 600;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .seg-aarohini  { background: var(--aarohini); }
+    .seg-madhya    { background: var(--madhya); color: #fff; }
+    .seg-avarohini { background: var(--avarohini); }
+
+    .ep-list { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .ep-list-row {
+      display: grid;
+      grid-template-columns: 110px 1fr auto;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .ep-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #1a1310;
+    }
+    .tag-aarohini  { background: var(--aarohini); }
+    .tag-madhya    { background: var(--madhya); color: #fff; }
+    .tag-avarohini { background: var(--avarohini); }
+
+    .retro-mark {
+      display: inline-block;
+      margin-left: 2px;
+      font-weight: 700;
+      cursor: help;
+      opacity: 0.85;
+    }
+
+    .shani-list { display: grid; gap: 6px; }
+    .shani-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      padding: 8px 12px;
+      background: var(--panel-2);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .shani-row.current {
+      border-left: 3px solid var(--accent);
+      background: rgba(212, 163, 115, 0.08);
+    }
+    .shani-row .when { color: var(--muted); }
+    .badge-active {
+      display: inline-block;
+      padding: 2px 6px;
+      background: var(--accent);
+      color: #1a1310;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    /* Планеты-таблица */
+    table.planets {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.planets th, table.planets td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.planets th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    table.planets tr:last-child td { border-bottom: 0; }
+    .planet-symbol { font-size: 16px; }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <header>
+    <h1>Ведическая астрология</h1>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="sade-sati">Сади Сати</button>
+      <button class="tab-btn" data-tab="nakshatra">Натальная карта</button>
+    </nav>
+  </header>
+
+  <!-- ─────────── ТАБ: САДИ САТИ ─────────── -->
+  <section class="tab active" id="tab-sade-sati">
+    <p style="color:var(--muted)">
+      Транзит Сатурна через три знака вокруг натальной Луны (~7,5 лет).
+      Параллельно — Аштама и Кантака Шани.
+    </p>
+
+    <form class="card birth-form" data-form="sade-sati">
+      <div class="form-grid">
+        <label>Год <input name="year" type="number" required value="1990" min="600" max="2400"/></label>
+        <label>Месяц <input name="month" type="number" required value="5" min="1" max="12"/></label>
+        <label>День <input name="day" type="number" required value="17" min="1" max="31"/></label>
+        <label>Час <input name="hour" type="number" required value="14" min="0" max="23"/></label>
+        <label>Минута <input name="minute" type="number" required value="30" min="0" max="59"/></label>
+        <label>Широта <input name="lat" type="number" required value="45.0428" step="0.0001"/></label>
+        <label>Долгота <input name="lon" type="number" required value="41.9734" step="0.0001"/></label>
+      </div>
+      <div class="tz-row" style="margin-top: 12px">
+        <label>UTC ±, ч
+          <input name="tz" type="number" step="0.5" value="3" data-auto="1" readonly/>
+        </label>
+        <div class="tz-mode">
+          <button type="button" class="active" data-mode="auto">Авто</button>
+          <button type="button" data-mode="manual">Ручной</button>
+        </div>
+      </div>
+      <div class="tz-hint" data-role="tz-hint"></div>
+      <button type="submit" class="primary">Рассчитать</button>
+      <div class="error hidden" data-role="error"></div>
+    </form>
+
+    <div class="loading hidden" data-role="loading">Считаем 120 лет транзитов Сатурна…</div>
+    <div class="hidden" data-role="result"></div>
+  </section>
+
+  <!-- ─────────── ТАБ: НАТАЛЬНАЯ КАРТА ─────────── -->
+  <section class="tab" id="tab-nakshatra">
+    <p style="color:var(--muted)">
+      Натальная Луна, накшатра, пада, лагна и положения планет на момент рождения.
+    </p>
+
+    <form class="card birth-form" data-form="nakshatra">
+      <div class="form-grid">
+        <label>Год <input name="year" type="number" required value="1990" min="600" max="2400"/></label>
+        <label>Месяц <input name="month" type="number" required value="5" min="1" max="12"/></label>
+        <label>День <input name="day" type="number" required value="17" min="1" max="31"/></label>
+        <label>Час <input name="hour" type="number" required value="14" min="0" max="23"/></label>
+        <label>Минута <input name="minute" type="number" required value="30" min="0" max="59"/></label>
+        <label>Широта <input name="lat" type="number" required value="45.0428" step="0.0001"/></label>
+        <label>Долгота <input name="lon" type="number" required value="41.9734" step="0.0001"/></label>
+      </div>
+      <div class="tz-row" style="margin-top: 12px">
+        <label>UTC ±, ч
+          <input name="tz" type="number" step="0.5" value="3" data-auto="1" readonly/>
+        </label>
+        <div class="tz-mode">
+          <button type="button" class="active" data-mode="auto">Авто</button>
+          <button type="button" data-mode="manual">Ручной</button>
+        </div>
+      </div>
+      <div class="tz-hint" data-role="tz-hint"></div>
+      <button type="submit" class="primary">Рассчитать</button>
+      <div class="error hidden" data-role="error"></div>
+    </form>
+
+    <div class="loading hidden" data-role="loading">Считаем положения планет…</div>
+    <div class="hidden" data-role="result"></div>
+  </section>
+</div>
+
+<script>
+  const API_URL = window.__API_URL__ || ""; // тот же домен, что и страница
+
+  // ────── Табы ──────
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.tab;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+      document.querySelectorAll(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
+    });
+  });
+
+  // ────── Форматирование ──────
+  function fmtDate(s) {
+    if (!s) return "";
+    const d = new Date(s);
+    if (isNaN(d)) return s;
+    return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" });
+  }
+  function fmtYears(days) {
+    if (days < 365) return `${Math.round(days)} дн`;
+    const y = Math.floor(days / 365.25);
+    const m = Math.round((days - y * 365.25) / 30.44);
+    return m === 0 ? `${y} г` : `${y} г ${m} мес`;
+  }
+
+  // ────── Автодетект часового пояса ──────
+  // Привязываем к каждой форме: при изменении lat/lon/year/month/day
+  // дёргаем /api/tz и подставляем в поле tz.
+  document.querySelectorAll("form.birth-form").forEach(form => {
+    const tzInput = form.querySelector('input[name="tz"]');
+    const hintEl  = form.querySelector('[data-role="tz-hint"]');
+    const modeBtns = form.querySelectorAll('.tz-mode button');
+
+    let mode = "auto"; // auto | manual
+
+    function setMode(m) {
+      mode = m;
+      modeBtns.forEach(b => b.classList.toggle("active", b.dataset.mode === m));
+      tzInput.readOnly = (m === "auto");
+      tzInput.dataset.auto = (m === "auto") ? "1" : "0";
+      if (m === "auto") refreshTz();
+      else hintEl.textContent = "Ручной ввод — без поправок DST/декретного времени.";
+    }
+    modeBtns.forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
+    async function refreshTz() {
+      if (mode !== "auto") return;
+      const f = new FormData(form);
+      const lat = +f.get("lat"), lon = +f.get("lon");
+      const year = +f.get("year"), month = +f.get("month"), day = +f.get("day");
+      const hour = +f.get("hour") || 12, minute = +f.get("minute") || 0;
+      if (!lat || !lon || !year || !month || !day) return;
+      hintEl.classList.remove("warn");
+      hintEl.textContent = "Определяем часовой пояс…";
+      try {
+        const url = `${API_URL}/api/tz?lat=${lat}&lon=${lon}&year=${year}&month=${month}&day=${day}&hour=${hour}&minute=${minute}`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error((await r.json()).detail || `HTTP ${r.status}`);
+        const d = await r.json();
+        tzInput.value = d.offset_hours;
+        const dst = d.is_dst ? " · летнее время" : "";
+        hintEl.textContent = `${d.tz_name} → ${d.offset_str}${dst}`;
+        if (d.ambiguous) {
+          hintEl.classList.add("warn");
+          hintEl.textContent += " · " + (d.note || "ambiguous time");
+        }
+      } catch (e) {
+        hintEl.classList.add("warn");
+        hintEl.textContent = "Не удалось определить TZ: " + e.message;
+      }
+    }
+
+    ["lat", "lon", "year", "month", "day"].forEach(n => {
+      form.querySelector(`input[name="${n}"]`)?.addEventListener("change", refreshTz);
+    });
+    setMode("auto"); // первичная инициализация
+  });
+
+  // ────── Helpers для submit ──────
+  function readBirth(form) {
+    const f = new FormData(form);
+    return {
+      year: +f.get("year"), month: +f.get("month"), day: +f.get("day"),
+      hour: +f.get("hour"), minute: +f.get("minute"),
+      tz: +f.get("tz"), lat: +f.get("lat"), lon: +f.get("lon"),
+    };
+  }
+  async function postJson(path, body) {
+    const r = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || `HTTP ${r.status}`);
+    }
+    return r.json();
+  }
+
+  // ────── САДИ САТИ submit ──────
+  const SS_PHASE_RU = { Aarohini: "Aarohini", Madhya: "Madhya (пик)", Avarohini: "Avarohini" };
+  const SS_PHASE_CLASS = { Aarohini: "aarohini", Madhya: "madhya", Avarohini: "avarohini" };
+
+  document.querySelector('form[data-form="sade-sati"]').addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    const err  = form.querySelector('[data-role="error"]');
+    const load = document.querySelector('#tab-sade-sati [data-role="loading"]');
+    const res  = document.querySelector('#tab-sade-sati [data-role="result"]');
+    const btn  = form.querySelector('button[type="submit"]');
+    err.classList.add("hidden"); res.classList.add("hidden"); load.classList.remove("hidden"); btn.disabled = true;
+    try {
+      const data = await postJson("/api/sade-sati", readBirth(form));
+      res.innerHTML = renderSadeSati(data);
+      res.classList.remove("hidden");
+    } catch (ex) {
+      err.textContent = "Ошибка: " + ex.message;
+      err.classList.remove("hidden");
+    } finally {
+      load.classList.add("hidden");
+      btn.disabled = false;
+    }
+  });
+
+  function renderSadeSati(d) {
+    return [
+      renderNatalMoon(d.natal_moon),
+      renderCurrent(d),
+      renderCycles(d),
+      renderShani("Аштама Шани", d.ashtama_sign, d.ashtama_shani_periods, d.current.ashtama_shani),
+      renderShani("Кантака Шани", d.kantaka_sign, d.kantaka_shani_periods, d.current.kantaka_shani),
+    ].join("");
+  }
+
+  function renderNatalMoon(n) {
+    const b = n.boundary;
+    let warn = "";
+    if (b.topo_applied) {
+      warn = `<div class="boundary-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы знака — применён топоцентрический расчёт
+        (поправка ${b.delta_arcsec}″).
+        ${b.sign_changed_by_topo ? "<b>Знак изменился относительно геоцентрического!</b>" : "Знак не изменился."}
+      </div>`;
+    } else if (b.near_boundary) {
+      warn = `<div class="boundary-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы знака.
+      </div>`;
+    }
+    return `
+      <h2>Натальная Луна</h2>
+      <div class="card">
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-label">Знак (раши)</div>
+            <div class="stat-value">${n.sign_ru} <span style="color:var(--muted)">(${n.sign})</span></div></div>
+          <div class="stat"><div class="stat-label">Градус в знаке</div>
+            <div class="stat-value">${n.deg_in_sign_dms}</div></div>
+          <div class="stat"><div class="stat-label">Накшатра</div>
+            <div class="stat-value">${n.nakshatra_ru} · пада ${n.pada}</div></div>
+          <div class="stat"><div class="stat-label">Управитель</div>
+            <div class="stat-value">${n.nk_lord}</div></div>
+          <div class="stat"><div class="stat-label">Фрейм</div>
+            <div class="stat-value">${n.frame === "topocentric" ? "топоцентрический" : "геоцентрический"}</div></div>
+        </div>
+        ${warn}
+      </div>`;
+  }
+
+  function renderCurrent(d) {
+    const c = d.current;
+    if (!c.sade_sati && !c.ashtama_shani && !c.kantaka_shani) {
+      return `<h2>Сейчас</h2><div class="card"><div style="color:var(--muted)">Сейчас ни один период не активен.</div></div>`;
+    }
+    const blocks = [];
+    if (c.sade_sati) {
+      const ph = c.sade_sati.phase;
+      const cls = SS_PHASE_CLASS[ph] || "madhya";
+      const retro = c.sade_sati.is_retrograde_return
+        ? ' <span class="retro-mark" title="Ретроградный возврат">↺</span>' : "";
+      blocks.push(`
+        <div class="now-card" style="border-color: var(--${cls})">
+          <div><span class="phase-tag" style="background: var(--${cls})">САДИ САТИ · ${SS_PHASE_RU[ph]}${retro}</span></div>
+          <div style="margin-top:8px; font-size: 16px">Сатурн в знаке <b>${c.sade_sati.sign_ru}</b>${c.sade_sati.is_retrograde_return ? ' <span style="color:var(--muted); font-size:13px">(возврат после ретроградности)</span>' : ""}</div>
+          <div style="color:var(--muted); font-size: 13px; margin-top: 4px">
+            ${fmtDate(c.sade_sati.dt_start)} → ${fmtDate(c.sade_sati.dt_end)} · осталось ${fmtYears(c.sade_sati.days_remaining)}
+          </div>
+          <div class="progress"><div class="progress-fill" style="width: ${c.sade_sati.progress * 100}%; background: var(--${cls})"></div></div>
+        </div>`);
+    }
+    if (c.ashtama_shani) {
+      blocks.push(`<div class="now-card" style="border-color: var(--ashtama); margin-top: 16px">
+        <div><span class="phase-tag" style="background: var(--ashtama); color:#fff">АШТАМА ШАНИ</span></div>
+        <div style="margin-top:8px">Сатурн в ${c.ashtama_shani.sign_ru} · осталось ${fmtYears(c.ashtama_shani.days_remaining)}</div>
+      </div>`);
+    }
+    if (c.kantaka_shani) {
+      blocks.push(`<div class="now-card" style="border-color: var(--kantaka); margin-top: 16px">
+        <div><span class="phase-tag" style="background: var(--kantaka); color:#fff">КАНТАКА ШАНИ</span></div>
+        <div style="margin-top:8px">Сатурн в ${c.kantaka_shani.sign_ru} · осталось ${fmtYears(c.kantaka_shani.days_remaining)}</div>
+      </div>`);
+    }
+    return `<h2>Сейчас</h2><div class="card">${blocks.join("")}</div>`;
+  }
+
+  function renderCycles(d) {
+    if (!d.sade_sati_cycles.length) return "";
+    const cycles = d.sade_sati_cycles.map((c, i) => {
+      const t0 = new Date(c.episodes[0].dt_start).getTime();
+      const t1 = new Date(c.episodes[c.episodes.length - 1].dt_end).getTime();
+      const total = t1 - t0;
+      const segs = c.episodes.map(ep => {
+        const a = new Date(ep.dt_start).getTime();
+        const b = new Date(ep.dt_end).getTime();
+        const w = total > 0 ? ((b - a) / total) * 100 : 0;
+        const cls = SS_PHASE_CLASS[ep.phase] || "madhya";
+        return `<div class="seg seg-${cls}" style="width:${w}%" title="${ep.phase} · ${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}">${w > 8 ? ep.phase : ""}</div>`;
+      }).join("");
+      const rows = c.episodes.map(ep => `
+        <div class="ep-list-row">
+          <span class="ep-tag tag-${SS_PHASE_CLASS[ep.phase]}">${ep.phase}${ep.is_retrograde_return ? ' <span class="retro-mark" title="Ретроградный возврат">↺</span>' : ""}</span>
+          <span>${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}</span>
+          <span>${Math.round(ep.duration_days)} дн</span>
+        </div>`).join("");
+      let flag = "";
+      if (c.truncated_start) flag += " · начало до даты рождения";
+      if (c.truncated_end)   flag += " · конец вне окна поиска";
+      return `<div class="cycle">
+        <div class="cycle-header">
+          <div class="cycle-title">Цикл #${i + 1}</div>
+          <div class="cycle-meta">${fmtDate(c.dt_start)} → ${fmtDate(c.dt_end)} · ${c.duration_years} лет${flag}</div>
+        </div>
+        <div class="timeline">${segs}</div>
+        <div class="ep-list">${rows}</div>
+      </div>`;
+    }).join("");
+    return `<h2>Циклы Сади Сати</h2><div class="card">${cycles}</div>`;
+  }
+
+  function renderShani(title, sign, periods, currentEp) {
+    if (!periods.length) return "";
+    const rows = periods.map(ep => {
+      const cur = currentEp && ep.dt_start === currentEp.dt_start;
+      return `<div class="shani-row ${cur ? "current" : ""}">
+        <div>${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)} ${cur ? '<span class="badge-active">сейчас</span>' : ""}</div>
+        <div class="when">${Math.round(ep.duration_days)} дн</div>
+      </div>`;
+    }).join("");
+    return `<h2>${title} · знак ${sign.sign_ru}</h2><div class="card"><div class="shani-list">${rows}</div></div>`;
+  }
+
+  // ────── НАТАЛЬНАЯ КАРТА submit ──────
+  document.querySelector('form[data-form="nakshatra"]').addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    const err  = form.querySelector('[data-role="error"]');
+    const load = document.querySelector('#tab-nakshatra [data-role="loading"]');
+    const res  = document.querySelector('#tab-nakshatra [data-role="result"]');
+    const btn  = form.querySelector('button[type="submit"]');
+    err.classList.add("hidden"); res.classList.add("hidden"); load.classList.remove("hidden"); btn.disabled = true;
+    try {
+      const data = await postJson("/api/horoscope", readBirth(form));
+      res.innerHTML = renderHoroscope(data);
+      res.classList.remove("hidden");
+    } catch (ex) {
+      err.textContent = "Ошибка: " + ex.message;
+      err.classList.remove("hidden");
+    } finally {
+      load.classList.add("hidden");
+      btn.disabled = false;
+    }
+  });
+
+  function renderHoroscope(d) {
+    const nk = d.nk, lagna = d.lagna, b = d.boundary || {};
+    let warn = "";
+    if (b.changed) {
+      warn = `<div class="boundary-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы накшатры — топоцентрический расчёт
+        изменил накшатру: <b>${b.geo_nk}</b> → <b>${b.topo_nk}</b>.
+      </div>`;
+    } else if (b.near_boundary) {
+      warn = `<div class="boundary-warn">
+        Луна в ${b.dist_to_boundary_deg}° от границы накшатры (топоцентрика проверена, накшатра не изменилась).
+      </div>`;
+    }
+
+    const planets = d.planets.map(p => `
+      <tr>
+        <td><span class="planet-symbol">${p.abbr || ""}</span> ${p.name}</td>
+        <td>${p.sign_ru} ${p.deg_in_sign_dms}</td>
+        <td>${p.nakshatra_ru || ""} ${p.pada ? "· " + p.pada : ""}</td>
+        <td>${p.retrograde ? "R" : ""}</td>
+      </tr>`).join("");
+
+    return `
+      <h2>Натальная Луна</h2>
+      <div class="card">
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-label">Луна (сидерич.)</div><div class="stat-value">${d.moon_dms}</div></div>
+          <div class="stat"><div class="stat-label">Накшатра</div><div class="stat-value">${nk.ru} · пада ${nk.pada}</div></div>
+          <div class="stat"><div class="stat-label">Управитель</div><div class="stat-value">${nk.lord}</div></div>
+          <div class="stat"><div class="stat-label">Гана / Символ</div><div class="stat-value">${nk.gana || ""} · ${nk.symbol || ""}</div></div>
+        </div>
+        ${warn}
+      </div>
+
+      <h2>Лагна (асцендент)</h2>
+      <div class="card">
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-label">Знак</div><div class="stat-value">${lagna.sign_ru} <span style="color:var(--muted)">(${lagna.sign})</span></div></div>
+          <div class="stat"><div class="stat-label">Градус</div><div class="stat-value">${lagna.asc_dms}</div></div>
+          <div class="stat"><div class="stat-label">Управитель</div><div class="stat-value">${lagna.lord}</div></div>
+          <div class="stat"><div class="stat-label">Элемент</div><div class="stat-value">${lagna.element}</div></div>
+        </div>
+      </div>
+
+      <h2>Планеты</h2>
+      <div class="card">
+        <table class="planets">
+          <thead>
+            <tr><th>Планета</th><th>Знак · градус</th><th>Накшатра · пада</th><th></th></tr>
+          </thead>
+          <tbody>${planets}</tbody>
+        </table>
+      </div>`;
+  }
+</script>
+
+</body>
+</html>
