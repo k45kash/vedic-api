@@ -176,6 +176,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? "";
     .tag-madhya    { background: var(--madhya); color: #fff; }
     .tag-avarohini { background: var(--avarohini); }
 
+    .retro-mark {
+      display: inline-block;
+      margin-left: 2px;
+      font-weight: 700;
+      cursor: help;
+      opacity: 0.85;
+    }
+
     .shani-list { display: grid; gap: 6px; }
     .shani-row {
       display: grid;
@@ -367,13 +375,16 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? "";
     if (c.sade_sati) {
       const ph = c.sade_sati.phase;
       const cls = PHASE_CLASS[ph] || "madhya";
+      const retroMark = c.sade_sati.is_retrograde_return
+        ? ' <span class="retro-mark" title="Ретроградный возврат: Сатурн уже был в этом знаке и вернулся">↺</span>'
+        : "";
       blocks.push(`
         <div class="now-card" style="border-color: var(--${cls})">
           <div>
-            <span class="phase-tag tag-${cls}" style="background: var(--${cls})">САДИ САТИ · ${PHASE_RU[ph]}</span>
+            <span class="phase-tag tag-${cls}" style="background: var(--${cls})">САДИ САТИ · ${PHASE_RU[ph]}${retroMark}</span>
           </div>
           <div style="margin-top:8px; font-size: 16px">
-            Сатурн в знаке <b>${c.sade_sati.sign_ru}</b>
+            Сатурн в знаке <b>${c.sade_sati.sign_ru}</b>${c.sade_sati.is_retrograde_return ? ' <span style="color:var(--muted); font-size:13px">(возврат после ретроградности)</span>' : ""}
           </div>
           <div style="color:var(--muted); font-size: 13px; margin-top: 4px">
             ${fmtDate(c.sade_sati.dt_start)} → ${fmtDate(c.sade_sati.dt_end)}
@@ -419,7 +430,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? "";
 
       const rows = c.episodes.map(ep => `
         <div class="ep-list-row">
-          <span class="ep-tag tag-${PHASE_CLASS[ep.phase]}">${ep.phase}</span>
+          <span class="ep-tag tag-${PHASE_CLASS[ep.phase]}">
+            ${ep.phase}${ep.is_retrograde_return ? ' <span class="retro-mark" title="Ретроградный возврат: Сатурн уже был в этом знаке и вернулся обратно">↺</span>' : ""}
+          </span>
           <span>${ep.sign_ru} · ${fmtDate(ep.dt_start)} → ${fmtDate(ep.dt_end)}</span>
           <span>${Math.round(ep.duration_days)} дн</span>
         </div>

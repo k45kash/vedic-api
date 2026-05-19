@@ -246,6 +246,12 @@ def _cycle_summary(eps: list) -> dict:
     js = eps[0]["jd_start"]
     je = eps[-1]["jd_end"]
     span_days = je - js
+
+    seen_signs: set = set()
+    for ep in eps:
+        ep["is_retrograde_return"] = ep["sign_num"] in seen_signs
+        seen_signs.add(ep["sign_num"])
+
     return {
         "dt_start":         eps[0]["dt_start"],
         "dt_end":           eps[-1]["dt_end"],
@@ -356,15 +362,16 @@ def _current_episode(eps: list, jd_now: float, tz: float) -> Optional[dict]:
             total = ep["jd_end"] - ep["jd_start"]
             done  = jd_now - ep["jd_start"]
             return {
-                "phase":           ep.get("phase"),
-                "sign":            ep["sign"],
-                "sign_ru":         ep["sign_ru"],
-                "sign_num":        ep["sign_num"],
-                "dt_start":        ep["dt_start"],
-                "dt_end":          ep["dt_end"],
-                "days_remaining":  round(ep["jd_end"] - jd_now, 1),
-                "days_elapsed":    round(done, 1),
-                "progress":        round(done / total, 3) if total > 0 else 0,
+                "phase":                ep.get("phase"),
+                "sign":                 ep["sign"],
+                "sign_ru":              ep["sign_ru"],
+                "sign_num":             ep["sign_num"],
+                "dt_start":             ep["dt_start"],
+                "dt_end":               ep["dt_end"],
+                "days_remaining":       round(ep["jd_end"] - jd_now, 1),
+                "days_elapsed":         round(done, 1),
+                "progress":             round(done / total, 3) if total > 0 else 0,
+                "is_retrograde_return": ep.get("is_retrograde_return", False),
             }
     return None
 
