@@ -10,7 +10,7 @@
 |-----|------|-------|
 | Backend (API) | Python 3.11, FastAPI, pyswisseph | `vedic-api-production-626f.up.railway.app` |
 | Frontend | Nuxt 3 (SPA, `ssr: false`), Vue 3 | `vedic-nuxt-front-production.up.railway.app` |
-| База | MongoDB (в процессе подключения) | сервис на Railway + Volume |
+| База | MongoDB | сервис на Railway + Volume |
 
 Подробности — в [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Текущие задачи и ход работ — в [`docs/PLAN.md`](docs/PLAN.md).
@@ -43,14 +43,24 @@
 │   ├── layouts/default.vue     #   навигация и общие стили
 │   └── nuxt.config.ts          #   apiUrl, ssr:false, флаги сборки
 │
+├── calculators/                # трактовки традиции (TS, без фреймворка) — не подключены
+│   └── (tara/kuta/event-picker/sadhana/chart/nakshatra + api-adapter)
+├── content/                    # контентная база джйотиша (34 JSON, 1,4 МБ) — не подключена
+├── prototype/index.html        # кликабельный референс UI (демо-данные, не прод-код)
+│
 ├── ephe/                       # эфемериды Swiss Ephemeris (данные расчётов)
 │
-├── docs/                       # архитектура и план работ
+├── docs/                       # архитектура, план работ, IA/дизайн контентного слоя
 ├── requirements.txt            # зависимости Python
 ├── .env.example                # шаблон секретов (реальный .env не коммитится)
 ├── Procfile / nixpacks.toml    # деплой бэкенда на Railway
 └── runtime.txt                 # python-3.11
 ```
+
+`calculators/` и `content/` — расчёты-трактовки и контент джйотиша поверх эфемерид
+(тара-бала, совместимость, подбор даты события и т.д.). Готовы, но пока не
+подключены к Nuxt — что уже сделано и что дальше см. [`docs/HANDOFF.md`](docs/HANDOFF.md),
+[`docs/COVERAGE.md`](docs/COVERAGE.md) и фазу в [`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 
