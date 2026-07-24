@@ -16,5 +16,11 @@ export default defineNuxtConfig({
       apiUrl: 'https://vedic-api-production-626f.up.railway.app',
     },
   },
+  // Vite 7 не создаёт отдельный SSR-сервер, из-за чего vite-node IPC-сокет
+  // в dev не инициализируется ("Vite Node IPC socket path not configured").
+  // Environment API запускает resolveServer сразу и выставляет socketPath.
+  experimental: {
+    viteEnvironmentApi: true,
+  },
   devtools: { enabled: false },
 })
