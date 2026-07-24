@@ -5,3 +5,8 @@ pyswisseph
 numpy
 pytz
 timezonefinder
+
+# ── Auth ─────────────────────────────────────────────
+fastapi-users[beanie]
+httpx-oauth
+pydantic-settings

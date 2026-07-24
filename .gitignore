@@ -8,6 +8,11 @@ __pycache__/
 .DS_Store
 .idea/
 
+# Секреты — .env НИКОГДА не коммитим, .env.example — можно
+.env
+.env.*
+!.env.example
+
 # Эфемериды — игнорируем всё кроме файлов для эпохи 600-2400 (seXX_06/12/18.se1)
 ephe/sat/
 ephe/se*

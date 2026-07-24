@@ -8,13 +8,11 @@ FastAPI сервер для ведической астрологии.
     http://localhost:8000/docs
 """
 
-import os
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import pytz
@@ -25,7 +23,24 @@ from nakshatra_calculator import calculate
 from nakshatra_calendar import calc_calendar
 from sade_sati import calc_sade_sati
 
-app = FastAPI(title="Vedic Astrology API", version="1.0.0")
+from auth.db import init_db
+from auth.router import router as auth_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Инициализация Mongo/Beanie. Толерантно к ошибке: если база ещё не
+    # поднята (например, не задан MONGODB_URI) — публичные калькуляторы
+    # продолжают работать, недоступны будут только auth-эндпоинты.
+    try:
+        await init_db()
+        print("[auth] MongoDB подключена, Beanie инициализирован")
+    except Exception as e:
+        print(f"[auth] init_db не удался ({e}); auth выключен, публичный API работает")
+    yield
+
+
+app = FastAPI(title="Vedic Astrology API", version="1.0.0", lifespan=lifespan)
 
 _tz_finder = TimezoneFinder()
 
@@ -36,6 +51,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Роуты авторизации: регистрация, JWT-логин, профиль (соц-логины — следующим шагом)
+app.include_router(auth_router)
 
 
 # ─── Модели запросов ────────────────────────────────────────────────────────
@@ -85,23 +103,9 @@ class SadeSatiRequest(BaseModel):
 
 # ─── Эндпоинты ──────────────────────────────────────────────────────────────
 
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-
 @app.get("/")
 def root():
     return {"status": "ok", "message": "Vedic Astrology API работает"}
-
-
-@app.get("/sade-sati")
-def sade_sati_page():
-    return FileResponse(os.path.join(STATIC_DIR, "sade-sati.html"))
-
-
-@app.get("/app")
-def app_page():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/api/tz")
