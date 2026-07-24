@@ -1,0 +1,36 @@
+{
+  "_source": "nakshatry_polnyy (14).html — FILTER_DEFS (~строка 1772), ganaBase (~1769), makeFilterRow/buildGrid/gMatch/renderGrid (~1786-1872), input#gq",
+  "normalize_rule": {
+    "description": "ganaBase(v): берёт значение до первого из разделителей « (» (пробел + открывающая скобка), « ·» (пробел + средняя точка), «;» (точка с запятой), « +» (пробел + плюс) — в этом порядке применения split — и обрезает пробелы по краям. Пустое/отсутствующее значение превращается в пустую строку.",
+    "regex": "^(.*?)(?:\\s\\(|\\s·|;|\\s\\+|$)",
+    "js_source": "function ganaBase(v){ return (v||'').split(' (')[0].split(' ·')[0].split(';')[0].split(' +')[0].trim(); }"
+  },
+  "facets": [
+    {"key": "ruler", "label": "Управитель", "primary": true, "source_field": "ruler", "normalized": false},
+    {"key": "nature", "label": "Тип (природа)", "primary": true, "source_field": "nature", "normalized": true},
+    {"key": "gana", "label": "Гана", "primary": false, "source_field": "gana", "normalized": true},
+    {"key": "element", "label": "Стихия", "primary": false, "source_field": "element", "normalized": true},
+    {"key": "dosha", "label": "Доша", "primary": false, "source_field": "dosha", "normalized": true},
+    {"key": "purushartha", "label": "Цель", "primary": false, "source_field": "purushartha", "normalized": true},
+    {"key": "varna", "label": "Варна", "primary": false, "source_field": "varna", "normalized": true},
+    {"key": "yoni", "label": "Йони", "primary": false, "source_field": "yoni", "normalized": true}
+  ],
+  "facet_behavior": {
+    "chip_format": "значение + счётчик: «Val (N)»; счётчики по всем 27 накшатрам",
+    "toggle": "клик по активному чипу снимает фильтр; в пределах фасета активен максимум один чип (single-select)",
+    "combine": "разные фасеты объединяются по AND",
+    "hide_rule": "фасет не рендерится, если различных значений меньше 2 (makeFilterRow возвращает null)",
+    "more_toggle": {"show": "▸ Ещё фильтры", "hide": "▾ Меньше фильтров", "description": "не-primary фасеты скрыты и раскрываются кнопкой (gShowMore)"},
+    "reset": "кнопка «× Сбросить» очищает gFilters, gGandanta и поле поиска #gq"
+  },
+  "gandanta_toggle": {
+    "label": "⚠ Гандантовые (6)",
+    "description": "Флаг gGandanta: показывать только накшатры, у которых поле gandanta заполнено и не равно строке «Нет» (условие: d.gandanta && d.gandanta !== 'Нет')."
+  },
+  "search": {
+    "input_id": "gq",
+    "placeholder": "Поиск: название, девата, символ…",
+    "fields": ["name", "devata", "symbol", "span", "ruler", "nature", "gana", "yoni", "varna", "element", "dosha", "purushartha", "shakti", "dev"],
+    "description": "Подстрочный регистронезависимый поиск: перечисленные поля склеиваются через пробел, приводятся к lowerCase, ищется indexOf(term); поля после ruler берутся с фолбэком в пустую строку."
+  }
+}

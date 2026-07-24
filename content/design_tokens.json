@@ -1,0 +1,187 @@
+{
+  "_source": "nakshatry_polnyy (14).html — :root CSS-переменные, body-стили, JS-цветмапы (app.js)",
+  "colors": {
+    "core": {
+      "ink": {
+        "value": "#e9e2d2",
+        "role": "основной текст (тёплый слоновая кость)"
+      },
+      "dim": {
+        "value": "#a89c84",
+        "role": "приглушённый текст, подзаголовки"
+      },
+      "faint": {
+        "value": "#6f6753",
+        "role": "самый слабый текст, лейблы форм"
+      },
+      "bg": {
+        "value": "#0a0c12",
+        "role": "фон страницы (почти чёрный, синеватый)"
+      },
+      "panel": {
+        "value": "#12151f",
+        "role": "фон панелей (градиенты .tool, th таблиц, hover)"
+      },
+      "panel2": {
+        "value": "#171b28",
+        "role": "вторая ступень панели (конец градиентов)"
+      },
+      "card": {
+        "value": "#161a27",
+        "role": "фон карточек, инпутов, чипов"
+      },
+      "gold": {
+        "value": "#dcb45c",
+        "role": "основной акцент — золото (ссылки, крупные значения)"
+      },
+      "gold2": {
+        "value": "#b8923a",
+        "role": "тёмное золото — uppercase-заголовки секций, номера"
+      },
+      "goldsoft": {
+        "value": "#e8cd86",
+        "role": "мягкое золото — заголовки h3 инструментов"
+      },
+      "line": {
+        "value": "#282d3e",
+        "role": "цвет рамок и разделителей"
+      },
+      "saff": {
+        "value": "#e08b3e",
+        "role": "шафран — акцентные ссылки"
+      },
+      "rose": {
+        "value": "#c76b7a",
+        "role": "роза — негатив/предупреждения (gandanta, tbad)"
+      },
+      "sky": {
+        "value": "#7fa8c9",
+        "role": "небо — нейтральные пометки"
+      },
+      "leaf": {
+        "value": "#8fb27a",
+        "role": "лист — позитивные пометки (tgood)"
+      },
+      "violet": {
+        "value": "#a488c4",
+        "role": "фиолет — дополнительный акцент"
+      }
+    },
+    "elements": {
+      "_source": "ELEM_COL (app.js:1179)",
+      "Огонь": "#d8624a",
+      "Земля": "#8fb27a",
+      "Воздух": "#7a9ec7",
+      "Вода": "#6a8fc7"
+    },
+    "house_groups": {
+      "_source": "HOUSE_GROUP_COL (app.js:1559) и идентичный grpCol в chartSVGNorth/South",
+      "Трикона": "#8fa877",
+      "Кендра": "#7a9ec7",
+      "Духстана": "#c76b7a",
+      "Упачая": "#d4b978",
+      "Марака": "#b08a7f"
+    },
+    "planets": {
+      "_source": "RETRO_COL (app.js:1146) по слагам; полностью совпадает с YK_COLORS и с PLANET_COLORS/RULER_COLORS из ui_colors.json",
+      "surya": "#e0a53e",
+      "chandra": "#cfd6e0",
+      "mangala": "#d8624a",
+      "budha": "#8fb27a",
+      "guru": "#e0c15a",
+      "shukra": "#d59ac0",
+      "shani": "#7f8db0",
+      "rahu": "#8a7fb0",
+      "ketu": "#b08a7f"
+    },
+    "js_maps_other": {
+      "RULER_COL_PADA": {
+        "_source": "app.js:809 — цвета управителей накшатр по русским именам; значения = planets",
+        "Кету": "#b08a7f",
+        "Венера": "#d59ac0",
+        "Солнце": "#e0a53e",
+        "Луна": "#cfd6e0",
+        "Марс": "#d8624a",
+        "Раху": "#8a7fb0",
+        "Юпитер": "#e0c15a",
+        "Сатурн": "#7f8db0",
+        "Меркурий": "#8fb27a"
+      },
+      "SADHANA_ELEM_COL": {
+        "_source": "app.js:437 — стихии в блоке садханы; Вода и Земля/Воздух отличаются от ELEM_COL",
+        "Огонь": "#d8624a",
+        "Вода": "#7a9ec7",
+        "Земля": "#8fa877",
+        "Воздух": "#d4b978"
+      },
+      "fallback_color": {
+        "value": "#888",
+        "role": "запасной цвет во всех JS-мапах (||'#888')"
+      },
+      "accent_fallback": {
+        "value": "#b8923a",
+        "role": "запасной акцент карточек накшатр (RULER_COLORS[...]||'#b8923a')"
+      },
+      "_note": "qc (app.js:1707) и relcls (app.js:1492) — мапы CSS-классов (yq-best/yq-good/... , rel-f/rel-e/...), не hex-цвета"
+    }
+  },
+  "typography": {
+    "font_family": "\"Iowan Old Style\",\"Palatino Linotype\",Palatino,Georgia,serif",
+    "line_height": 1.62,
+    "letter_spacing_body": ".1px",
+    "h1": {
+      "font_size": "clamp(40px,7vw,66px)",
+      "font_weight": 400,
+      "letter_spacing": "2px",
+      "line_height": 1,
+      "fill": "градиент linear-gradient(180deg,#f2dc98,#c1963c) через background-clip:text"
+    },
+    "section_headers_pattern": "мелкий uppercase с большим letter-spacing цветом gold2: .toc h2 / .tithi-sub / .pada-sub — font-size 11–13px, letter-spacing 2–3px, text-transform:uppercase, color:var(--gold2), font-weight:400; .eyebrow в шапке — 11px/letter-spacing:5px",
+    "block_h4": "заголовки блоков статей: 11.5px, letter-spacing 2.5px, uppercase, gold2, с линией-хвостом ::after (1px, var(--line))",
+    "tool_h3": "26px, font-weight 400, color goldsoft",
+    "base_text_sizes": "основной текст статей 14–14.5px (.block p — 14.5px, #d3c8ac), вторичный 13.5px, мета/бейджи 11px, инпуты 14px",
+    "extra_text_colors": {
+      "lede": "#c6bb9f",
+      "block_p": "#d3c8ac",
+      "tresult": "#d9cdaf"
+    }
+  },
+  "background": {
+    "body_background_verbatim": "radial-gradient(ellipse 130% 70% at 50% -5%,#161d33 0%,transparent 55%), radial-gradient(ellipse 80% 50% at 90% 105%,#141726 0%,transparent 50%), var(--bg)",
+    "layers": [
+      "слой 1: широкий эллипс сверху по центру (130% x 70% at 50% -5%) — тёмно-синее свечение #161d33, гаснет к 55%",
+      "слой 2: эллипс в правом нижнем углу (80% x 50% at 90% 105%) — #141726, гаснет к 50%",
+      "слой 3: сплошной var(--bg) #0a0c12"
+    ]
+  },
+  "patterns": {
+    "border_radius": {
+      "typical": "чипы/мелкие элементы 7–10px, инпуты 9–10px, карточки 12–15px, крупные панели (.tool) 18px, пилюли-табы 16–22px, бейджи-пилюли (.rb) 14px, индикаторы-точки 50%",
+      "most_frequent": [
+        "8px",
+        "12px",
+        "11px",
+        "10px",
+        "9px"
+      ]
+    },
+    "cards": "фон — градиент linear-gradient(165deg,var(--card),var(--panel2)) или (var(--panel),var(--panel2)) для .tool; рамка 1px solid var(--line) (у .tool — var(--gold2)); радиус 13–18px",
+    "badges": "мелкий uppercase-текст 11px с letter-spacing 1–1.5px, padding 2–5px x 7–12px, border-radius 8–14px, рамка 1px в цвет содержимого (часто с альфой: acc+'66' или rgba(...,.35)), пример — .rulerbadge .rb, .hi-group, .gandflag, .cgand",
+    "semantic_chips": ".tgood (leaf / rgba(143,178,122,.35)), .tbad (rose / rgba(199,107,122,.35)), .tneutral (sky / rgba(127,168,201,.35))",
+    "sticky_toc": ".toc — position:sticky; top:0; height:100vh; overflow-y:auto; левая колонка 270px в grid .shell (270px 1fr, max-width 1240px); скрывается на <=900px",
+    "translucent_panels": "полупрозрачные подложки типа .legend — rgba(18,21,31,.6) (panel с альфой)",
+    "hover_transitions": "короткие transition .13s–.16s на ссылках, чипах и карточках"
+  },
+  "starfield": {
+    "_source": "app.js:16-20 — IIFE, canvas .stars",
+    "star_count": 170,
+    "radius": "Math.random()*1.3 px",
+    "alpha_per_star": "Math.random()*.7+.15 (0.15–0.85)",
+    "colors": {
+      "gold_prob_15pct": "#dcb45c",
+      "default_moon_white": "#cfd6e0"
+    },
+    "canvas_css_opacity": 0.45,
+    "behavior": "перерисовка на resize; fixed, inset:0, pointer-events:none, z-index:0"
+  }
+}
