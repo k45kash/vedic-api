@@ -24,5 +24,20 @@ export function useApi() {
     return r.json()
   }
 
-  return { base, post, get }
+  // fastapi-users' /auth/jwt/login ждёт OAuth2PasswordRequestForm —
+  // form-urlencoded, а не JSON, поэтому отдельный метод.
+  async function postForm<T = unknown>(path: string, body: Record<string, string>): Promise<T> {
+    const r = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(body),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      throw new Error(err.detail || `HTTP ${r.status}`)
+    }
+    return r.json()
+  }
+
+  return { base, post, get, postForm }
 }

@@ -5,6 +5,7 @@ const nav = [
   { href: '/panchang',  label: 'Панчанг'   },
   { href: '/calendar',  label: 'Календарь' },
   { href: '/sade-sati', label: 'Сади Сати' },
+  { href: '/login',     label: 'Вход'      },
 ]
 </script>
 
