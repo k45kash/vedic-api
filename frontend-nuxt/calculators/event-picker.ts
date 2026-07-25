@@ -8,8 +8,39 @@ import EVENTS from '../content/events_muhurta.json'
 import TITHI from '../content/tithi.json'
 import WEIGHTS from '../content/picker_weights.json'
 import { taraFor } from './tara'
-import { nakName } from './nakshatra'
+import { nakName, isGandantaNakshatra } from './nakshatra'
 import type { Paksha, ScoreLine, WeekdayRu } from './types'
+
+/** Совпадает ли запись справочника титх с текущей титхи.
+ *
+ * Записи в `events_muhurta.json` бывают двух видов: номер («11») и название
+ * («Амавасья», «Пурнима (по ряду школ)»). Раньше сверка шла через `parseInt`,
+ * из-за чего словесные записи молча отбрасывались — а это ровно две самые
+ * значимые титхи, и встречаются они в 42 местах. Например для стрижки
+ * Амавасья указана в `avoid_tithis`, но день всё равно получал «отличное окно».
+ *
+ * Новолуние и полнолуние — это одна и та же 15-я титхи, различает их пакша.
+ */
+function tithiMatches(entry: string, tn: number, paksha: Paksha): boolean {
+  const s = String(entry).trim().toLowerCase()
+  const num = parseInt(s, 10)
+  if (!Number.isNaN(num)) return num === tn
+  if (s.includes('амавас')) return tn === 15 && paksha === 'krishna'
+  if (s.includes('пурним')) return tn === 15 && paksha === 'shukla'
+  return false
+}
+
+/** Совпадает ли запись справочника накшатр с накшатрой дня.
+ *
+ * Кроме имён в списках встречается категория «гандантовые» — стыки водных и
+ * огненных знаков. Она тоже отбрасывалась: подстрока не совпадает ни с одним
+ * названием. Разворачиваем её через уже готовую `isGandantaNakshatra`.
+ */
+function nakshatraMatches(entry: string, nakNo: number, nakNm: string): boolean {
+  const s = String(entry).trim().toLowerCase()
+  if (s.includes('гандант')) return isGandantaNakshatra(nakNo)
+  return nakNm.includes(entry) || entry.includes(nakNm)
+}
 
 export type EventDef = (typeof EVENTS)['events'][number]
 
@@ -62,8 +93,8 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
   if (input.dayNakNo) {
     total += WEIGHTS.nakshatra
     const nm = nakName(input.dayNakNo)
-    const good = (ev.good_nakshatras || []).some((x) => nm.includes(x) || x.includes(nm))
-    const bad = (ev.avoid_nakshatras || []).some((x) => nm.includes(x) || x.includes(nm))
+    const good = (ev.good_nakshatras || []).some((x) => nakshatraMatches(x, input.dayNakNo!, nm))
+    const bad = (ev.avoid_nakshatras || []).some((x) => nakshatraMatches(x, input.dayNakNo!, nm))
     if (good) {
       gained += WEIGHTS.nakshatra
       lines.push({ sign: '+', weight: WEIGHTS.nakshatra, text: `Накшатра ${nm} — благоприятна для события` })
@@ -116,8 +147,8 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
     let tname = TITHI.tithis[tn - 1]?.name || `титхи ${tn}`
     if (tn === 15) tname = paksha === 'krishna' ? 'Амавасья (новолуние)' : 'Пурнима (полнолуние)'
     const pakshaLabel = paksha === 'krishna' ? 'убывающая' : 'растущая'
-    const gt = (ev.good_tithis || []).some((x) => parseInt(x) === tn)
-    const bt = (ev.avoid_tithis || []).some((x) => parseInt(x) === tn)
+    const gt = (ev.good_tithis || []).some((x) => tithiMatches(x, tn, paksha))
+    const bt = (ev.avoid_tithis || []).some((x) => tithiMatches(x, tn, paksha))
 
     if (tn === 15 && paksha === 'krishna' && MUNDANE_IDS.includes(ev.id)) {
       gained -= WEIGHTS.tithi

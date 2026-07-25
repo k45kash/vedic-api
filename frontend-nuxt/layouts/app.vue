@@ -13,12 +13,12 @@ const { isDark, toggleTheme } = useTheme()
 const { isPro, setAudience } = useAudience()
 const auth = useAuth()
 
-// Пункты сайдбара. Первые два — рабочие маршруты, остальные пока задизейблены
+// Пункты сайдбара. Первые три — рабочие маршруты, остальные пока задизейблены
 // с меткой «скоро», как в прототипе.
 const navItems = [
   { label: 'Обо мне', icon: 'user', to: '/me' },
   { label: 'Сегодня', icon: 'sun', to: '/today' },
-  { label: 'Подобрать дату', icon: 'calendar', soon: true },
+  { label: 'Подобрать дату', icon: 'calendar', to: '/pick-date' },
   { label: 'Совместимость', icon: 'heart', soon: true },
   { label: 'Практики', icon: 'lotus', soon: true },
   { label: 'Справочник', icon: 'book', soon: true },

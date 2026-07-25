@@ -47,6 +47,7 @@ export default defineNuxtConfig({
         '/dashboard',
         '/me',
         '/today',
+        '/pick-date',
       ],
     },
   },
