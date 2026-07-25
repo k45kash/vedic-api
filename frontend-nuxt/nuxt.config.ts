@@ -1,7 +1,37 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { fileURLToPath } from 'node:url'
+
+// Корень репозитория: content/ и calculators/ лежат РЯДОМ с frontend-nuxt/,
+// внутрь фронтенда они не копируются (см. docs/HANDOFF.md §2).
+const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   ssr: false,
+
+  // Алиасы на внешние папки расчётов и контента (docs/HANDOFF.md §2).
+  // Работают и в dev, и в `nuxt generate`; глубокие пути тоже: '~calc/tara'.
+  alias: {
+    '~calc': fileURLToPath(new URL('../calculators', import.meta.url)),
+    '~content': fileURLToPath(new URL('../content', import.meta.url)),
+  },
+
+  vite: {
+    server: {
+      fs: {
+        // Vite в dev не отдаёт файлы выше корня проекта (frontend-nuxt/), а
+        // content/ и calculators/ лежат ВЫШЕ — иначе был бы 403
+        // "The request url is outside of Vite serving allow list".
+        //
+        // Проверено: сейчас это подстраховка, а не необходимость — Nuxt сам
+        // кладёт в allow свой workspaceDir, который для этого репозитория
+        // совпадает с корнем (определяется по .git). Vite конкатенирует
+        // пользовательский allow с nuxt'овым, так что запись безопасна и
+        // страхует от смены способа определения workspaceDir.
+        allow: [repoRoot],
+      },
+    },
+  },
   app: {
     head: {
       title: 'Vedic',
@@ -11,6 +41,9 @@ export default defineNuxtConfig({
       ],
     },
   },
+  // Дизайн-токены кабинета. Правила заскоуплены под .vd-app / body.vd-scope,
+  // поэтому глобальные стили старой раскладки (layouts/default.vue) не меняются.
+  css: ['~/assets/css/tokens.css'],
   runtimeConfig: {
     public: {
       apiUrl: 'https://vedic-api-production-626f.up.railway.app',
@@ -28,6 +61,8 @@ export default defineNuxtConfig({
         '/reset-password',
         '/auth/callback',
         '/dashboard',
+        '/me',
+        '/today',
       ],
     },
   },

@@ -1,0 +1,563 @@
+/* ===================================================================
+   ДИЗАЙН-СИСТЕМА КАБИНЕТА (перенос из prototype/v2.html)
+
+   Как это подключено и почему так:
+   1. Переменные живут на :root — они ничего не ломают, потому что старые
+      страницы (index/panchang/calendar/sade-sati/login/…) их не используют.
+   2. Все ВИЗУАЛЬНЫЕ правила (.card, .tile, .chip, .nav …) заскоуплены под
+      `.vd-app` — корень новой раскладки `layouts/app.vue`. Старая раскладка
+      `layouts/default.vue` объявляет свои глобальные `.card`, `body`, `*`, и
+      без скоупа они бы конфликтовали. Внутри `.vd-app` старых правил нет,
+      снаружи — нет новых.
+   3. Фон/типографику страницы задаёт `body.vd-scope`. Класс `vd-scope`
+      навешивает сама раскладка кабинета через useHead(bodyAttrs) и снимает
+      при уходе со страницы — поэтому `body` из default.vue не трогается.
+   =================================================================== */
+
+:root{
+  --page:#f4f3f9;
+  --surface:#ffffff;
+  --surface-2:#faf9fd;
+  --surface-3:#f2f0fa;
+  --line:#eae8f3;
+  --line-2:#ddd9ec;
+
+  --ink:#20233a;
+  --body:#565b73;
+  --muted:#8b90a6;
+
+  --accent:#6d5bd0;
+  --accent-ink:#5341b8;
+  --accent-soft:#f0edfc;
+  --accent-line:#ded7f7;
+
+  --gold:#a97f2b;
+  --gold-ink:#8a6412;
+  --gold-soft:#faf4e6;
+  --gold-line:#ecdcb6;
+
+  --good:#3f7d52; --good-soft:#eef6f0; --good-line:#cde3d4;
+  --bad:#b0455a;  --bad-soft:#fdeef1;  --bad-line:#f2ccd4;
+  --neu:#3f6f96;  --neu-soft:#eef4f9;  --neu-line:#cfdfec;
+
+  --sh-sm:0 1px 2px rgba(24,26,42,.04);
+  --sh-md:0 1px 2px rgba(24,26,42,.04), 0 10px 28px -16px rgba(24,26,42,.22);
+  --sh-lg:0 2px 6px rgba(24,26,42,.05), 0 22px 48px -24px rgba(38,28,90,.28);
+
+  --r-sm:10px; --r-md:14px; --r-lg:18px; --r-pill:999px;
+  --d-fast:150ms; --d-med:250ms; --e-out:cubic-bezier(.2,.7,.3,1);
+
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --side-w:260px;
+}
+
+:root[data-theme="dark"]{
+  --page:#101119;
+  --surface:#191b26;
+  --surface-2:#1f2130;
+  --surface-3:#242739;
+  --line:#282b3c;
+  --line-2:#353950;
+
+  --ink:#eceaf5;
+  --body:#a5aabf;
+  --muted:#767c94;
+
+  --accent:#9b8af0;
+  --accent-ink:#b3a5f7;
+  --accent-soft:rgba(124,105,232,.16);
+  --accent-line:rgba(124,105,232,.34);
+
+  --gold:#d9b25f;
+  --gold-ink:#e6c884;
+  --gold-soft:rgba(217,178,95,.12);
+  --gold-line:rgba(217,178,95,.3);
+
+  --good:#7fb08f; --good-soft:rgba(127,176,143,.12); --good-line:rgba(127,176,143,.3);
+  --bad:#d4808f;  --bad-soft:rgba(212,128,143,.12);  --bad-line:rgba(212,128,143,.3);
+  --neu:#7fa8c9;  --neu-soft:rgba(127,168,201,.12);  --neu-line:rgba(127,168,201,.3);
+
+  --sh-sm:0 1px 2px rgba(0,0,0,.3);
+  --sh-md:0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+  --sh-lg:0 2px 6px rgba(0,0,0,.35), 0 22px 48px -24px rgba(0,0,0,.7);
+}
+
+/* ===================== БАЗА =====================
+   Только внутри кабинета: body получает класс .vd-scope от layouts/app.vue. */
+body.vd-scope{
+  margin:0;background:var(--page);color:var(--body);
+  font-family:var(--sans);font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  transition:background var(--d-med) var(--e-out),color var(--d-med) var(--e-out);
+}
+body.vd-scope{height:100%}
+/* Отдельным правилом: если браузер не знает :has(), он отбросит только его,
+   а не всю группу селекторов. */
+html:has(> body.vd-scope){height:100%}
+
+/* Утилита доступности — безопасна глобально. */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+
+.vd-app *{box-sizing:border-box}
+.vd-app a{color:var(--accent-ink);text-decoration:none}
+.vd-app a:hover{text-decoration:underline}
+.vd-app button{font:inherit}
+.vd-app :where(a,button,input,select,summary):focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:6px;
+}
+
+/* ===================== КАРКАС ===================== */
+.vd-app .app{display:grid;grid-template-columns:var(--side-w) 1fr;min-height:100vh}
+
+/* --- сайдбар --- */
+.vd-app .side{
+  position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;
+  padding:22px 16px 18px;background:var(--surface);border-right:1px solid var(--line);
+  overflow-y:auto;
+}
+.vd-app .logo{display:flex;align-items:center;gap:11px;padding:2px 8px 22px}
+.vd-app .logo__mark{width:38px;height:38px;flex:none;color:var(--accent)}
+.vd-app .logo__name{font-family:var(--serif);font-size:21px;line-height:1.1;color:var(--ink);letter-spacing:.2px}
+.vd-app .logo__sub{font-size:11px;letter-spacing:.06em;color:var(--muted);margin-top:2px}
+/* Логотип — ссылка на «Обо мне»: подчёркивание тут ни к чему. */
+.vd-app a.logo:hover{text-decoration:none}
+
+.vd-app .nav{display:flex;flex-direction:column;gap:2px}
+.vd-app .nav__item{
+  display:flex;align-items:center;gap:12px;width:100%;
+  padding:10px 12px;border:0;border-radius:var(--r-md);
+  background:transparent;color:var(--body);font-size:14.5px;text-align:left;cursor:pointer;
+  transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+}
+.vd-app .nav__item svg{width:19px;height:19px;flex:none;color:var(--muted);transition:color var(--d-fast) var(--e-out)}
+.vd-app .nav__item:hover{background:var(--surface-3);color:var(--ink);text-decoration:none}
+.vd-app .nav__item:hover svg{color:var(--body)}
+.vd-app .nav__item.is-on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.vd-app .nav__item.is-on svg{color:var(--accent)}
+.vd-app .nav__item[disabled]{opacity:.55;cursor:default}
+.vd-app .nav__item[disabled]:hover{background:transparent;color:var(--body)}
+.vd-app .nav__soon{margin-left:auto;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+.vd-app .side__spacer{flex:1}
+.vd-app .promo{
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px;margin-bottom:14px;
+}
+.vd-app .promo__head{display:flex;align-items:center;gap:8px;color:var(--ink);font-weight:600;font-size:14px}
+.vd-app .promo__head svg{width:17px;height:17px;color:var(--gold)}
+.vd-app .promo__text{font-size:12.5px;color:var(--muted);margin:8px 0 13px;line-height:1.45}
+
+.vd-app .btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border:0;border-radius:var(--r-sm);padding:9px 16px;
+  background:var(--accent);color:#fff;font-size:13.5px;font-weight:600;cursor:pointer;
+  transition:background var(--d-fast) var(--e-out),transform var(--d-fast) var(--e-out);
+}
+.vd-app .btn:hover{background:var(--accent-ink);text-decoration:none;color:#fff}
+.vd-app .btn:active{transform:translateY(1px)}
+.vd-app .btn--ghost{background:transparent;color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.vd-app .btn--ghost:hover{background:var(--accent-soft);color:var(--accent-ink)}
+
+.vd-app .help{display:flex;align-items:center;gap:11px;padding:6px 8px;font-size:12.5px;color:var(--muted)}
+.vd-app .help svg{width:28px;height:28px;padding:5px;border-radius:50%;background:var(--surface-3);color:var(--accent);flex:none}
+.vd-app .help b{display:block;color:var(--ink);font-size:13px;font-weight:600}
+.vd-app .help a{font-size:12.5px}
+
+/* --- шапка контента --- */
+.vd-app .main{min-width:0;display:flex;flex-direction:column}
+.vd-app .topbar{
+  position:sticky;top:0;z-index:9;display:flex;align-items:center;gap:16px;
+  padding:20px 32px;background:color-mix(in srgb,var(--page) 86%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+}
+.vd-app .topbar__title{font-family:var(--serif);font-size:23px;color:var(--ink);margin:0;font-weight:400;letter-spacing:.2px}
+.vd-app .topbar__sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.vd-app .topbar__sub a{color:var(--accent-ink);margin-left:6px}
+.vd-app .topbar__spacer{flex:1}
+/* .iconbtn ниже задаёт display:grid — гасим бургер через тот же вес правила */
+.vd-app .iconbtn.burger{display:none}
+
+.vd-app .seg{display:inline-flex;gap:2px;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill)}
+.vd-app .seg button{
+  border:0;background:transparent;color:var(--muted);font-size:12.5px;font-weight:500;
+  padding:6px 14px;border-radius:var(--r-pill);cursor:pointer;
+  transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+}
+.vd-app .seg button:hover{color:var(--ink)}
+.vd-app .seg button.is-on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.vd-app .seg--side{display:none;margin:14px 2px 0}
+.vd-app .seg--side button{flex:1;text-align:center}
+
+.vd-app .iconbtn{
+  width:40px;height:40px;display:grid;place-items:center;flex:none;
+  border:1px solid var(--line);background:var(--surface);color:var(--body);
+  border-radius:var(--r-md);cursor:pointer;
+  transition:border-color var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+}
+.vd-app .iconbtn:hover{border-color:var(--line-2);color:var(--ink)}
+.vd-app .iconbtn svg{width:19px;height:19px}
+.vd-app .avatar{
+  width:40px;height:40px;flex:none;border-radius:50%;display:grid;place-items:center;
+  background:var(--accent-soft);color:var(--accent-ink);font-weight:600;font-size:14px;
+  box-shadow:inset 0 0 0 1px var(--accent-line);
+}
+
+.vd-app .content{padding:24px 32px 56px;max-width:1240px;width:100%}
+
+/* затемнение под мобильным меню */
+.vd-app .scrim{display:none}
+
+/* ===================== ПРИМИТИВЫ ===================== */
+/* Смена страницы вместо смены панели: анимация въезда осталась. */
+.vd-app .panel{animation:vd-rise var(--d-med) var(--e-out)}
+@keyframes vd-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.vd-app .card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:20px 22px;box-shadow:var(--sh-sm);
+}
+.vd-app .card--flat{box-shadow:none}
+.vd-app .card__head{display:flex;align-items:center;gap:10px;margin:-2px 0 16px}
+.vd-app .card__title{font-size:16px;font-weight:600;color:var(--ink);margin:0}
+.vd-app .card__link{margin-left:auto;font-size:13px;color:var(--accent-ink);font-weight:500}
+
+.vd-app .sechead{
+  font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);margin:30px 0 12px;display:flex;align-items:center;gap:9px;
+}
+.vd-app .sechead:first-child{margin-top:0}
+.vd-app .flag{
+  font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  color:var(--accent-ink);background:var(--accent-soft);border-radius:var(--r-pill);padding:3px 8px;
+}
+.vd-app .hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+.vd-app .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.vd-app .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.vd-app .grid-53{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
+
+/* плитки-показатели (верхний ряд) */
+.vd-app .tile{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px 18px;box-shadow:var(--sh-sm);position:relative;overflow:hidden;
+}
+.vd-app .tile__label{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.vd-app .tile__value{font-family:var(--serif);font-size:22px;color:var(--ink);line-height:1.2}
+.vd-app .tile__meta{font-size:12px;color:var(--muted);margin-top:5px}
+/* Астрологические знаки. В system-ui глифов ♈–♓ нет, и браузер уезжает
+   в Apple Color Emoji — знаки становятся цветными плашками мимо палитры.
+   Поэтому: явный символьный шрифт + текстовая презентация (VS15 в разметке). */
+.vd-app .tile__glyph,
+.vd-app .prow__glyph{
+  font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans",serif;
+  font-variant-emoji:text;
+}
+.vd-app .tile__glyph{
+  position:absolute;top:12px;right:14px;font-size:27px;line-height:1;
+  color:var(--gold);opacity:.85;
+}
+
+/* герой накшатры */
+.vd-app .hero{display:flex;gap:18px;align-items:flex-start}
+.vd-app .hero__no{
+  font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--accent-ink);
+  background:var(--accent-soft);border-radius:var(--r-md);padding:9px 12px;flex:none;
+}
+.vd-app .hero__name{font-family:var(--serif);font-weight:400;font-size:27px;color:var(--ink);margin:0 0 3px}
+.vd-app .hero__dev{font-size:12.5px;color:var(--muted)}
+.vd-app .badge{
+  display:inline-flex;align-items:center;gap:6px;margin-top:11px;
+  font-size:11.5px;font-weight:500;color:var(--gold-ink);
+  background:var(--gold-soft);border:1px solid var(--gold-line);border-radius:var(--r-pill);padding:4px 11px;
+}
+.vd-app .badge svg{width:13px;height:13px}
+.vd-app .shakti{margin-top:13px;font-size:14.5px;color:var(--body)}
+.vd-app .shakti b{color:var(--ink);font-weight:600}
+.vd-app .metaline{
+  margin-top:15px;padding-top:13px;border-top:1px solid var(--line);
+  font-size:13px;color:var(--muted);
+}
+.vd-app .metaline b{color:var(--ink);font-weight:600}
+
+/* строки планет */
+.vd-app .prow{
+  display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:baseline;
+  padding:13px 0;border-top:1px solid var(--line);
+}
+.vd-app .prow:first-of-type{border-top:0;padding-top:2px}
+.vd-app .prow__name{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;font-size:14.5px}
+.vd-app .prow__glyph{
+  width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:50%;
+  background:var(--gold-soft);color:var(--gold-ink);font-size:14px;
+}
+.vd-app .prow__pos{font-size:12.5px;color:var(--muted);margin-top:3px;padding-left:35px}
+.vd-app .prow__desc{font-size:14px;color:var(--body)}
+.vd-app .dig{
+  display:inline-block;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:var(--r-pill);padding:2px 8px;margin-left:5px;
+}
+.vd-app .dig--ex{background:var(--good-soft);color:var(--good);border:1px solid var(--good-line)}
+.vd-app .dig--own{background:var(--neu-soft);color:var(--neu);border:1px solid var(--neu-line)}
+.vd-app .dig--deb{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad-line)}
+
+/* таблица «ключ — значение» (панчанга, лунные данные) */
+.vd-app .kv{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-top:1px solid var(--line);font-size:14px}
+.vd-app .kv:first-of-type{border-top:0}
+.vd-app .kv__k{color:var(--muted);font-size:13.5px}
+.vd-app .kv__v{color:var(--ink);text-align:right}
+.vd-app .txt-good{color:var(--good)}
+.vd-app .txt-bad{color:var(--bad)}
+
+/* вердикт дня */
+.vd-app .verdict{display:flex;gap:18px;align-items:flex-start}
+.vd-app .verdict__score{
+  width:62px;height:62px;flex:none;display:grid;place-items:center;border-radius:var(--r-lg);
+  font-family:var(--serif);font-size:30px;
+  background:var(--good-soft);color:var(--good);border:1px solid var(--good-line);
+}
+.vd-app .verdict__score--bad{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-line)}
+.vd-app .verdict__score--neutral{background:var(--neu-soft);color:var(--neu);border-color:var(--neu-line)}
+.vd-app .verdict__text{font-size:16px;color:var(--ink)}
+.vd-app .chip{
+  display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+  border-radius:var(--r-pill);padding:3px 10px;margin-left:8px;vertical-align:2px;
+}
+.vd-app .chip--good{background:var(--good-soft);color:var(--good);border:1px solid var(--good-line)}
+.vd-app .chip--bad{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad-line)}
+.vd-app .chip--neutral{background:var(--neu-soft);color:var(--neu);border:1px solid var(--neu-line)}
+
+/* предупреждение и дисклеймер */
+.vd-app .warn{
+  display:flex;gap:12px;align-items:flex-start;margin-top:16px;
+  background:var(--bad-soft);border:1px solid var(--bad-line);border-radius:var(--r-md);
+  padding:14px 16px;font-size:13.5px;color:var(--body);
+}
+.vd-app .warn svg{width:19px;height:19px;flex:none;color:var(--bad);margin-top:1px}
+.vd-app .warn b{color:var(--ink)}
+.vd-app .disc{
+  display:flex;gap:11px;align-items:flex-start;margin-top:26px;
+  font-size:12.5px;color:var(--muted);line-height:1.5;
+}
+.vd-app .disc svg{width:16px;height:16px;flex:none;color:var(--muted);margin-top:2px}
+
+/* мантра — сакральный акцент */
+.vd-app .mantra{
+  background:linear-gradient(160deg,var(--gold-soft),var(--surface) 70%);
+  border:1px solid var(--gold-line);text-align:center;
+}
+.vd-app .mantra__dn{font-size:27px;color:var(--gold-ink);line-height:1.5;letter-spacing:.5px}
+.vd-app .mantra__ia{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--body);margin-top:4px}
+.vd-app .mantra__ru{font-size:12.5px;color:var(--muted);margin-top:7px}
+
+/* степпер даты */
+.vd-app .dstep{display:inline-flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:4px}
+.vd-app .dstep button{
+  width:30px;height:30px;border:0;border-radius:50%;background:transparent;
+  color:var(--muted);font-size:17px;line-height:1;cursor:pointer;
+  transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+}
+.vd-app .dstep button:hover{background:var(--surface-3);color:var(--ink)}
+.vd-app .dstep span{padding:0 10px;font-size:13.5px;color:var(--ink)}
+
+/* карта домов */
+.vd-app .chart{width:100%;max-width:260px;height:auto;margin:0 auto;display:block}
+.vd-app .chart text{font-family:var(--sans)}
+
+/* режим «Астролог»: .pro-блоки видны только когда на корне есть .is-pro */
+.vd-app .pro{display:none}
+.vd-app.is-pro .pro{display:block}
+.vd-app .prow.pro{display:none}
+.vd-app.is-pro .prow.pro{display:grid}
+
+/* ===================================================================
+   ПАТТЕРНЫ ИЗ МАКЕТА prototype/concepte.png
+   Новых цветов не вводим — только уже перенесённые токены.
+   =================================================================== */
+
+/* --- шапка: навигатор даты, локация, колокольчик, аватар --- */
+.vd-app .topbar__center{display:flex;justify-content:center;min-width:0}
+.vd-app .topbar__right{display:flex;align-items:center;gap:12px}
+
+.vd-app .datenav{
+  display:inline-flex;align-items:center;gap:2px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:4px 6px;
+}
+.vd-app .datenav button{
+  width:30px;height:30px;border:0;border-radius:50%;background:transparent;
+  color:var(--muted);cursor:pointer;display:grid;place-items:center;
+  transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+}
+.vd-app .datenav button:hover{background:var(--surface-3);color:var(--ink)}
+.vd-app .datenav button svg{width:17px;height:17px}
+.vd-app .datenav__label{padding:0 14px;font-size:13.5px;color:var(--ink);white-space:nowrap}
+
+/* заголовок в одну строку: иначе он налезает на навигатор даты по центру */
+.vd-app .topbar__id{min-width:0}
+.vd-app .topbar__title,
+.vd-app .topbar__sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.vd-app .place{display:flex;align-items:flex-start;gap:8px;text-align:left;white-space:nowrap}
+.vd-app .place svg{width:17px;height:17px;flex:none;color:var(--accent);margin-top:2px}
+.vd-app .place__city{font-size:13px;color:var(--ink);font-weight:500;line-height:1.3}
+.vd-app .place__time{font-size:12px;color:var(--muted);line-height:1.3;margin-top:2px}
+
+.vd-app .iconbtn{position:relative}
+.vd-app .iconbtn__dot{
+  position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 2px var(--surface);
+}
+.vd-app .avatarbtn{
+  display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;cursor:pointer;
+}
+.vd-app .avatarbtn svg{width:16px;height:16px;color:var(--muted)}
+
+/* --- карточка-показатель из макета (богаче, чем .tile) --- */
+.vd-app .grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+
+.vd-app .statcard{
+  display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:15px 16px 14px;box-shadow:var(--sh-sm);
+}
+.vd-app .statcard--hl{
+  border-color:var(--gold-line);
+  background:linear-gradient(180deg,var(--gold-soft),var(--surface) 62%);
+}
+.vd-app .statcard__head{display:flex;align-items:center;gap:9px}
+.vd-app .statcard__no{
+  width:25px;height:25px;flex:none;border-radius:50%;display:grid;place-items:center;
+  background:var(--surface-3);color:var(--muted);font-size:12px;font-weight:600;
+}
+.vd-app .statcard--hl .statcard__no{background:var(--gold-soft);color:var(--gold-ink)}
+.vd-app .statcard__label{font-size:13.5px;color:var(--body)}
+.vd-app .statcard__glyph{
+  margin:16px auto 11px;height:44px;display:grid;place-items:center;
+  color:var(--accent);font-size:32px;line-height:1;
+  font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans",serif;
+  font-variant-emoji:text;
+}
+.vd-app .statcard__glyph svg{width:40px;height:40px}
+.vd-app .statcard__value{font-family:var(--serif);font-size:19px;color:var(--ink);text-align:center;line-height:1.25}
+.vd-app .statcard__until{font-size:12.5px;color:var(--muted);text-align:center;margin-top:3px}
+.vd-app .statcard__score{margin-top:11px;text-align:center;font-size:13px;color:var(--muted)}
+.vd-app .statcard__score b{font-weight:600;color:var(--good)}
+.vd-app .statcard__score--mid b{color:var(--gold-ink)}
+.vd-app .statcard__score--low b{color:var(--bad)}
+.vd-app .statcard__chips{display:flex;justify-content:center;margin-top:9px}
+.vd-app .statcard__chips .chip{margin-left:0}
+.vd-app .statcard__text{margin:12px 0 0;font-size:13px;color:var(--body);line-height:1.5}
+.vd-app .statcard__listhead{margin-top:13px;font-size:13px;color:var(--ink);font-weight:500}
+.vd-app .statcard__list{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.vd-app .statcard__list li{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--body)}
+.vd-app .statcard__list svg{width:14px;height:14px;flex:none;color:var(--good);margin-top:3px}
+.vd-app .statcard__more{margin-top:auto;padding-top:14px;text-align:center;font-size:13px}
+
+/* --- полоски-рейтинги «9 / 10» --- */
+.vd-app .scorebar{display:flex;align-items:center;gap:10px;padding:6px 0}
+.vd-app .scorebar__icon{width:19px;height:19px;flex:none;color:var(--accent)}
+.vd-app .scorebar__label{width:104px;flex:none;font-size:13.5px;color:var(--body)}
+.vd-app .scorebar__track{flex:1;min-width:36px;height:5px;border-radius:var(--r-pill);background:var(--surface-3);overflow:hidden}
+.vd-app .scorebar__fill{
+  display:block;height:100%;border-radius:var(--r-pill);background:var(--good);
+  transition:width var(--d-med) var(--e-out);
+}
+.vd-app .scorebar__fill--mid{background:var(--gold)}
+.vd-app .scorebar__fill--low{background:var(--bad)}
+.vd-app .scorebar__val{width:46px;flex:none;text-align:right;font-size:12.5px;color:var(--muted)}
+
+/* --- «Важно знать сегодня»: строки с иконкой, названием и временем --- */
+.vd-app .wlist{display:flex;flex-direction:column;gap:9px}
+.vd-app .wlist__row{
+  display:flex;align-items:center;gap:11px;padding:11px 13px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);
+}
+.vd-app .wlist__ic{
+  width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;
+  background:var(--bad-soft);color:var(--bad);
+}
+.vd-app .wlist__ic svg{width:18px;height:18px}
+.vd-app .wlist__row--neutral .wlist__ic{background:var(--neu-soft);color:var(--neu)}
+.vd-app .wlist__row--gold .wlist__ic{background:var(--gold-soft);color:var(--gold-ink)}
+.vd-app .wlist__row--good .wlist__ic{background:var(--good-soft);color:var(--good)}
+.vd-app .wlist__name{font-size:14px;color:var(--ink);font-weight:500}
+.vd-app .wlist__note{font-size:12.5px;color:var(--muted);margin-top:1px}
+.vd-app .wlist__time{margin-left:auto;font-size:13px;color:var(--body);white-space:nowrap}
+
+/* --- «Астрологическая причина дня»: маркеры разного типа --- */
+.vd-app .rlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:13px}
+.vd-app .rlist li{display:flex;gap:10px;font-size:13.5px;color:var(--body);line-height:1.5}
+.vd-app .rlist svg{width:18px;height:18px;flex:none;margin-top:2px}
+.vd-app .rlist__m--good{color:var(--good)}
+.vd-app .rlist__m--warn{color:var(--gold)}
+.vd-app .rlist__m--info{color:var(--neu)}
+.vd-app .rlist__m--bad{color:var(--bad)}
+
+/* --- нижняя поясняющая плашка на всю ширину --- */
+.vd-app .notebar{
+  display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-top:22px;
+  padding:13px 18px;background:var(--accent-soft);border:1px solid var(--accent-line);
+  border-radius:var(--r-md);font-size:12.5px;color:var(--body);
+}
+.vd-app .notebar svg{width:17px;height:17px;flex:none;color:var(--accent)}
+.vd-app .notebar__upd{display:flex;align-items:center;gap:7px;margin-left:auto;color:var(--muted)}
+.vd-app .notebar__upd svg{width:14px;height:14px;color:var(--muted)}
+
+/* подзаголовок в шапке карточки (макет: «Панчанга для вас» + пояснение) */
+.vd-app .card__head--stack{align-items:flex-start}
+.vd-app .card__sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+
+/* ===================== АДАПТИВ ===================== */
+@media (max-width:1400px){
+  /* локация в шапке уходит первой — она самая широкая и наименее нужная */
+  .vd-app .place{display:none}
+}
+@media (max-width:1100px){
+  .vd-app .grid-4{grid-template-columns:1fr 1fr}
+  .vd-app .grid-5{grid-template-columns:repeat(3,1fr)}
+  .vd-app .grid-53{grid-template-columns:1fr}
+}
+@media (max-width:900px){
+  .vd-app .app{grid-template-columns:1fr}
+  .vd-app .side{
+    position:fixed;inset:0 auto 0 0;width:var(--side-w);z-index:20;
+    transform:translateX(-100%);transition:transform var(--d-med) var(--e-out);box-shadow:var(--sh-lg);
+  }
+  .vd-app.is-menu .side{transform:none}
+  .vd-app .scrim{
+    display:block;position:fixed;inset:0;z-index:19;background:rgba(20,22,38,.45);
+    opacity:0;pointer-events:none;transition:opacity var(--d-med) var(--e-out);
+  }
+  .vd-app.is-menu .scrim{opacity:1;pointer-events:auto}
+  .vd-app .iconbtn.burger{display:grid}
+  .vd-app .topbar{padding:14px 18px}
+  .vd-app .content{padding:18px 18px 48px}
+  .vd-app .seg--top{display:none}
+  .vd-app .seg--side{display:flex}
+  .vd-app .grid-5{grid-template-columns:repeat(2,1fr)}
+  /* Навигатор даты переезжает под заголовок. Перенос включаем только когда
+     он есть (.topbar--wrap), иначе кнопки шапки уезжают на вторую строку. */
+  .vd-app .topbar--wrap{flex-wrap:wrap}
+  .vd-app .topbar--wrap .topbar__center{order:10;width:100%;justify-content:flex-start}
+}
+@media (max-width:640px){
+  .vd-app .grid-4,
+  .vd-app .grid-2,
+  .vd-app .grid-5{grid-template-columns:1fr}
+  .vd-app .prow{grid-template-columns:1fr;gap:6px}
+  .vd-app .prow__pos{padding-left:35px}
+  .vd-app .hero{flex-direction:column;gap:12px}
+  .vd-app .verdict{gap:14px}
+  /* шапка на телефоне: одна строка на подпись, иначе дата рождения
+     разваливается на три строки и выдавливает заголовок */
+  .vd-app .topbar{gap:10px}
+  .vd-app .topbar__id{min-width:0}
+  .vd-app .topbar__title{font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vd-app .topbar__sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vd-app .topbar__sub a{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .vd-app *,
+  .vd-app *::before,
+  .vd-app *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
