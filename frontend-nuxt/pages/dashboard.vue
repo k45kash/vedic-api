@@ -2,14 +2,21 @@
 // Временная страница-заглушка после логина: показывает прототип UI
 // (prototype/index.html → скопирован в public/prototype.html) внутри iframe.
 // Уйдёт, когда Фаза 2 (PLAN.md) реально подключит content/+calculators/ к Nuxt.
-definePageMeta({ layout: false })
+// Доступ только для авторизованных — проверка вынесена в middleware/auth.ts.
+definePageMeta({ layout: false, middleware: 'auth' })
 useHead({ title: 'Прототип — Vedic' })
 
 const auth = useAuth()
+// Разворачиваем в отдельные refs — так шаблон авто-разворачивает .value.
+const { email: userEmail, plan } = auth
 
-if (!auth.isAuthenticated.value) {
-  await navigateTo('/login')
-}
+// Профиль подтягиваем после монтирования: если токен протух, useAuth сам его
+// вычистит на 401, и middleware отправит на /login при следующей навигации.
+onMounted(() => {
+  auth.fetchUser().catch(() => {
+    if (!auth.isAuthenticated.value) navigateTo('/login')
+  })
+})
 
 function logout() {
   auth.logout()
@@ -21,7 +28,10 @@ function logout() {
   <div class="wrap">
     <div class="bar">
       <span>Временная страница — прототип UI, не подключён к API. См. PLAN.md, Фаза 2.</span>
-      <button class="logout-btn" @click="logout">Выйти</button>
+      <span class="who">
+        <span v-if="userEmail">{{ userEmail }} · тариф: {{ plan }}</span>
+        <button class="logout-btn" @click="logout">Выйти</button>
+      </span>
     </div>
     <iframe src="/prototype.html" class="frame" title="Прототип" />
   </div>
@@ -40,6 +50,7 @@ function logout() {
   font-size: 13px;
   flex-shrink: 0;
 }
+.who { display: flex; align-items: center; gap: 12px; flex-shrink: 0; color: #a1a1a6; }
 .logout-btn {
   padding: 6px 16px;
   font-size: 13px;

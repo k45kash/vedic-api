@@ -1,12 +1,25 @@
 <script setup lang="ts">
 const route = useRoute()
+const auth = useAuth()
+const { isAuthenticated, email: userEmail } = auth
+
 const nav = [
   { href: '/',          label: 'Накшатра'  },
   { href: '/panchang',  label: 'Панчанг'   },
   { href: '/calendar',  label: 'Календарь' },
   { href: '/sade-sati', label: 'Сади Сати' },
-  { href: '/login',     label: 'Вход'      },
 ]
+
+// Профиль подтягиваем один раз при монтировании, если токен есть:
+// нужен email в шапке; на 401 useAuth сам вычистит протухший токен.
+onMounted(() => {
+  if (isAuthenticated.value && !auth.user.value) auth.fetchUser().catch(() => null)
+})
+
+async function onLogout() {
+  auth.logout()
+  await navigateTo('/login')
+}
 </script>
 
 <template>
@@ -18,6 +31,23 @@ const nav = [
             {{ item.label }}
           </NuxtLink>
         </li>
+
+        <!-- Гость: ссылка на вход. Залогинен: профиль + выход. -->
+        <template v-if="!isAuthenticated">
+          <li class="nav-right">
+            <NuxtLink to="/login" :class="{ active: route.path === '/login' }">Вход</NuxtLink>
+          </li>
+        </template>
+        <template v-else>
+          <li class="nav-right">
+            <NuxtLink to="/dashboard" :class="{ active: route.path === '/dashboard' }">
+              {{ userEmail || 'Профиль' }}
+            </NuxtLink>
+          </li>
+          <li>
+            <button type="button" class="nav-logout" @click="onLogout">Выйти</button>
+          </li>
+        </template>
       </ul>
     </nav>
     <main>
@@ -64,6 +94,22 @@ nav a {
 }
 nav a:hover { opacity: 1; }
 nav a.active { opacity: 1; color: #0071e3; }
+/* Блок авторизации прижимаем к правому краю */
+nav li.nav-right { margin-left: auto; }
+nav .nav-logout {
+  display: block;
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #1d1d1f;
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+nav .nav-logout:hover { opacity: 1; }
 
 main {
   max-width: 1200px;
