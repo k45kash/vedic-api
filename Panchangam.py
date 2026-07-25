@@ -69,6 +69,94 @@ PAKSHA_LABEL = {
     "Кришна": "Кришна (Тёмная)",
 }
 
+# ── НИТЬЯ-ЙОГИ ─────────────────────────────────────────────
+# 27 йог по 13°20' от СУММЫ сидерических долгот Солнца и Луны.
+# Порядок названий — Panchangam (Wikipedia):
+#   https://en.wikipedia.org/wiki/Panchangam
+#   «Yoga ... Apparent Moon plus Apparent Sun ... One Yoga = 13°20', 27 Yogas = 360°»
+# Названия и качества синхронизированы с frontend-nuxt/content/panchanga.json
+# (ключ "yoga"): ✦ → Очень благоприятная, ✓ → Благоприятная,
+#                ~ → Смешанная,           ✗ → Неблагоприятная.
+YOGAS = [
+    # (num, name, quality)
+    ( 1, "Вишкумбха", "Смешанная"),
+    ( 2, "Прити",     "Благоприятная"),
+    ( 3, "Аюшман",    "Благоприятная"),
+    ( 4, "Саубхагья", "Благоприятная"),
+    ( 5, "Шобхана",   "Благоприятная"),
+    ( 6, "Атиганда",  "Неблагоприятная"),
+    ( 7, "Сукарма",   "Благоприятная"),
+    ( 8, "Дхрити",    "Смешанная"),
+    ( 9, "Шула",      "Неблагоприятная"),
+    (10, "Ганда",     "Неблагоприятная"),
+    (11, "Вриддхи",   "Благоприятная"),
+    (12, "Дхрува",    "Благоприятная"),
+    (13, "Вьягхата",  "Неблагоприятная"),
+    (14, "Харшана",   "Благоприятная"),
+    (15, "Ваджра",    "Неблагоприятная"),
+    (16, "Сиддхи",    "Благоприятная"),
+    (17, "Вьятипата", "Неблагоприятная"),   # стоп-фактор: избегают целиком
+    (18, "Варияна",   "Смешанная"),
+    (19, "Паригха",   "Неблагоприятная"),
+    (20, "Шива",      "Благоприятная"),
+    (21, "Сиддха",    "Очень благоприятная"),
+    (22, "Садхья",    "Благоприятная"),
+    (23, "Шубха",     "Благоприятная"),
+    (24, "Шукла",     "Благоприятная"),
+    (25, "Брахма",    "Очень благоприятная"),
+    (26, "Индра",     "Очень благоприятная"),
+    (27, "Вайдхрити", "Неблагоприятная"),   # стоп-фактор: избегают целиком
+]
+
+# Номера йог-стоп-факторов (см. content/panchanga.json → yoga.note)
+YOGA_STOP_NUMS = (17, 27)   # Вьятипата, Вайдхрити
+
+# ── КАРАНЫ ─────────────────────────────────────────────────
+# Карана = половина титхи (6° разницы Луна−Солнце). В лунном месяце 60 каран.
+# Названия и качества — из frontend-nuxt/content/panchanga.json (ключ "karana").
+KARANAS = [
+    # (num, name, type, quality)
+    ( 1, "Бава",           "Чара",   "Благоприятная"),
+    ( 2, "Балава",         "Чара",   "Благоприятная"),
+    ( 3, "Каулава",        "Чара",   "Благоприятная"),
+    ( 4, "Тайтила",        "Чара",   "Благоприятная"),
+    ( 5, "Гара",           "Чара",   "Смешанная"),
+    ( 6, "Ваниджа",        "Чара",   "Смешанная"),
+    ( 7, "Вишти (Бхадра)", "Чара",   "Неблагоприятная"),   # стоп-фактор Бхадра
+    ( 8, "Шакуни",         "Стхира", "Смешанная"),
+    ( 9, "Чатушпада",      "Стхира", "Смешанная"),
+    (10, "Нага",           "Стхира", "Неблагоприятная"),
+    (11, "Кимстугхна",     "Стхира", "Благоприятная"),
+]
+
+KARANA_TYPE_LABEL = {
+    "Чара":   "Чара (подвижная)",
+    "Стхира": "Стхира (неподвижная)",
+}
+
+# Индекс караны Вишти/Бхадра в KARANAS (0-based) — стоп-фактор для фронта
+_KARANA_VISHTI = 6
+
+# Раскладка 60 полутитх лунного месяца на 11 каран.
+# Источники (сверено, совпадают дословно):
+#   1) https://en.wikipedia.org/wiki/Karaṇa_(pañcāṅga)
+#      «The fifty-six half tithi-s starting from Śukla pakṣa pratipad second half
+#       to Kṛṣṇa pakṣa caturdasi first half are given the variable names Bava,
+#       Bālava, Kaulava, Taitila, Gara, Vaṇij and Vṛṣṭi in a cyclical order,
+#       repeated eight times.»
+#      Фиксированные: Кришна чатурдаши 2-я половина — Шакуни;
+#      Амавасья 1-я половина — Чатушпада; Амавасья 2-я половина — Нага;
+#      Шукла пратипада 1-я половина — Кимстугхна.
+#   2) https://astrobix.com/learn/99-calculation-of-a-panchanga.html
+#      (та же последовательность, karana = 2*tithi−1 / 2*tithi)
+#
+# В 0-based индексе полутитхи k = int(((Луна−Солнце) mod 360) / 6):
+#   k = 0        → Кимстугхна   (Шукла пратипада, 1-я половина)
+#   k = 1..56    → Бава…Вишти циклом 8 раз ((k−1) mod 7)
+#   k = 57       → Шакуни       (Кришна чатурдаши, 2-я половина)
+#   k = 58       → Чатушпада    (Амавасья, 1-я половина)
+#   k = 59       → Нага         (Амавасья, 2-я половина)
+
 MUHURTAS = [
     # (номер, название, качество)
     ( 1, "Рудра",          "Неблагоприятная"),
@@ -148,10 +236,52 @@ def moon_lon(jd: float) -> float:
     return pos[0]
 
 
+def sun_lon_sid(jd: float) -> float:
+    """Сидерическая (нираяна, Лахири) долгота Солнца."""
+    pos, _ = swe.calc_ut(jd, swe.SUN, swe.FLG_SWIEPH | swe.FLG_SIDEREAL)
+    return pos[0]
+
+
+def moon_lon_sid(jd: float) -> float:
+    """Сидерическая (нираяна, Лахири) долгота Луны."""
+    pos, _ = swe.calc_ut(jd, swe.MOON, swe.FLG_SWIEPH | swe.FLG_SIDEREAL)
+    return pos[0]
+
+
 def tithi_index(jd: float) -> int:
     """Индекс титхи 0-29: (Луна-Солнце) / 12°."""
     diff = (moon_lon(jd) - sun_lon(jd)) % 360
     return int(diff / 12)
+
+
+def yoga_index(jd: float) -> int:
+    """
+    Индекс нитья-йоги 0-26: (Солнце + Луна) / 13°20'.
+
+    Долготы — СИДЕРИЧЕСКИЕ: в отличие от титхи/караны (разность, где айанамша
+    сокращается) сумма зависит от айанамши, поэтому тропические долготы дали бы
+    сдвиг на 2×айанамша (~48°, то есть ~3.6 йоги).
+    """
+    total = (sun_lon_sid(jd) + moon_lon_sid(jd)) % 360
+    return int(total / (40.0 / 3.0))       # 13°20' = 40/3°
+
+
+def karana_index(jd: float) -> int:
+    """Индекс полутитхи (караны) 0-59 в лунном месяце: (Луна-Солнце) / 6°."""
+    diff = (moon_lon(jd) - sun_lon(jd)) % 360
+    return int(diff / 6)
+
+
+def karana_num_for_half(k: int) -> int:
+    """
+    Номер караны (1-11 в KARANAS) для 0-based индекса полутитхи k (0-59).
+    Раскладка — см. комментарий у таблицы KARANAS.
+    """
+    if k == 0:
+        return 11          # Кимстугхна
+    if k <= 56:
+        return (k - 1) % 7 + 1     # Бава … Вишти, 8 циклов
+    return {57: 8, 58: 9, 59: 10}[k]   # Шакуни, Чатушпада, Нага
 
 
 def _sun_params(jd: float):
@@ -255,6 +385,85 @@ def calc_tithis(jd_s: float, jd_e: float, tz: float, step_h: float = 0.5) -> lis
     return result
 
 # ═══════════════════════════════════════════════════════════
+#  РАСЧЁТ НИТЬЯ-ЙОГ
+# ═══════════════════════════════════════════════════════════
+
+def calc_yogas(jd_s: float, jd_e: float, tz: float, step_h: float = 0.5) -> list:
+    """Список нитья-йог за период с временем начала/конца.
+
+    Средняя длительность йоги ~22.6 ч (минимум ~19.5 ч), поэтому шага 0.5 ч
+    заведомо хватает: (Солнце+Луна) растёт монотонно, пропусков границ нет.
+    """
+    step = step_h / 24
+    transitions = []
+    jd_cur = jd_s; prev = yoga_index(jd_cur)
+    while jd_cur <= jd_e:
+        jd_nx = jd_cur + step
+        cur = yoga_index(jd_nx)
+        if cur != prev:
+            transitions.append(_bisect(jd_cur, jd_nx, yoga_index, prev))
+            prev = cur
+        jd_cur = jd_nx
+
+    all_jd = [jd_s] + transitions + [jd_e]
+    result = []
+    for i in range(len(all_jd)-1):
+        js, je = all_jd[i], all_jd[i+1]
+        y = YOGAS[yoga_index(js)]
+        result.append({
+            "num": y[0], "name": y[1], "quality": y[2],
+            "is_stop": y[0] in YOGA_STOP_NUMS,
+            "jd_start": js, "jd_end": je,
+            "dt_start": jd_to_local(js, tz),
+            "dt_end":   jd_to_local(je, tz),
+            "duration_h": (je-js)*24,
+            "sun_moon_sum": round((sun_lon_sid(js)+moon_lon_sid(js)) % 360, 3),
+        })
+    return result
+
+# ═══════════════════════════════════════════════════════════
+#  РАСЧЁТ КАРАН
+# ═══════════════════════════════════════════════════════════
+
+def calc_karanas(jd_s: float, jd_e: float, tz: float, step_h: float = 0.5) -> list:
+    """Список каран за период с временем начала/конца.
+
+    Карана = половина титхи (~11.8 ч в среднем, минимум ~10 ч).
+    Поле is_bhadra помечает Вишти/Бхадру — стоп-фактор панчанги.
+    """
+    step = step_h / 24
+    transitions = []
+    jd_cur = jd_s; prev = karana_index(jd_cur)
+    while jd_cur <= jd_e:
+        jd_nx = jd_cur + step
+        cur = karana_index(jd_nx)
+        if cur != prev:
+            transitions.append(_bisect(jd_cur, jd_nx, karana_index, prev))
+            prev = cur
+        jd_cur = jd_nx
+
+    all_jd = [jd_s] + transitions + [jd_e]
+    result = []
+    for i in range(len(all_jd)-1):
+        js, je = all_jd[i], all_jd[i+1]
+        k   = karana_index(js)
+        kar = KARANAS[karana_num_for_half(k) - 1]
+        result.append({
+            "num": kar[0], "name": kar[1], "type": kar[2], "quality": kar[3],
+            "type_label":   KARANA_TYPE_LABEL[kar[2]],
+            "num_in_month": k + 1,             # 1-60: номер полутитхи в лунном месяце
+            "tithi_num":    k // 2 + 1,        # титхи, которой принадлежит карана
+            "tithi_half":   k % 2 + 1,         # 1 — первая половина, 2 — вторая
+            "is_bhadra":    kar[0] == KARANAS[_KARANA_VISHTI][0],
+            "jd_start": js, "jd_end": je,
+            "dt_start": jd_to_local(js, tz),
+            "dt_end":   jd_to_local(je, tz),
+            "duration_h": (je-js)*24,
+            "moon_sun_diff": round((moon_lon(js)-sun_lon(js)) % 360, 3),
+        })
+    return result
+
+# ═══════════════════════════════════════════════════════════
 #  РАСЧЁТ МУХУРТ
 # ═══════════════════════════════════════════════════════════
 
@@ -335,7 +544,9 @@ def calc_panchang(date_start, date_end, tz, lat=0.0, lon=0.0, elev_m=0.0):
     jd_s = dt_to_jd(datetime(date_start.year, date_start.month, date_start.day))           - tz/24
     jd_e = dt_to_jd(datetime(date_end.year,   date_end.month,   date_end.day, 23, 59, 59)) - tz/24
 
-    tithis = calc_tithis(jd_s, jd_e, tz)
+    tithis  = calc_tithis(jd_s, jd_e, tz)
+    yogas   = calc_yogas(jd_s, jd_e, tz)
+    karanas = calc_karanas(jd_s, jd_e, tz)
 
     days = []
     current = date_start
@@ -359,7 +570,7 @@ def calc_panchang(date_start, date_end, tz, lat=0.0, lon=0.0, elev_m=0.0):
         })
         current += timedelta(days=1)
 
-    return {"tithis": tithis, "days": days}
+    return {"tithis": tithis, "yogas": yogas, "karanas": karanas, "days": days}
 
 # ═══════════════════════════════════════════════════════════
 #  ВЫВОД

@@ -76,6 +76,33 @@ PLANETS = [
     {"name": "Кету",     "en": "Ketu",    "abbr": "☋"},
 ]
 
+# Средняя суточная скорость по долготе (°/сут) — база для порога «станции».
+# Абсолютный порог не годится: 0.01°/сут для Сатурна (средняя 0.033) — это треть
+# хода, а для Меркурия (1.38) — меньше процента. Поэтому порог задан долей от
+# средней скорости, одинаковой для всех планет.
+MEAN_DAILY_MOTION = {
+    "Солнце":   0.9856,
+    "Луна":    13.1764,
+    "Марс":     0.5240,
+    "Меркурий": 1.3833,
+    "Юпитер":   0.0831,
+    "Венера":   1.6021,
+    "Сатурн":   0.0335,
+    "Раху":     0.0529,
+    "Кету":     0.0529,
+}
+
+# Планета считается стоящей (станция), если |скорость| < 2% средней суточной.
+# Эмпирически это окно ≈ 15 ч у Меркурия, 19 ч у Сатурна, 24 ч у Юпитера,
+# 35 ч у Марса, 40 ч у Венеры — т.е. примерно «сутки вокруг разворота»
+# для всех планет сразу, чего абсолютный порог не даёт.
+STATIONARY_FRACTION = 0.02
+
+# Солнце и Луна не бывают ретроградными — это не «нет данных», а факт:
+# ретроградность видна только у тел, которые Земля обгоняет или которые
+# обгоняют её; светила по определению всегда идут прямо.
+NEVER_RETRO = ("Солнце", "Луна")
+
 NK_SIZE = 360 / 27
 # Порог предупреждения о близости к границе накшатры.
 # Скорость Луны ≈ 13.2°/сут = 0.009°/мин → 0.25° ≈ 27 минут хода.
@@ -120,20 +147,31 @@ def moon_trop(jd: float, topo: bool = False, lat: float = 0, lon: float = 0) -> 
 #  ПЛАНЕТЫ
 # ═══════════════════════════════════════════════════════════
 
-def _planet_trop_swe(jd: float, planet_idx: int) -> float:
-    """Тропическая долгота планеты через SWE.
+def _planet_trop_swe(jd: float, planet_idx: int) -> tuple:
+    """Тропическая долгота планеты и её скорость по долготе (°/сут) через SWE.
 
     Раху/Кету: используем TRUE_NODE (истинный узел).
-    Кету = Раху + 180°.
+    Кету = Раху + 180°, скорость у него та же, что у Раху (узлы — одна ось).
+
+    ВНИМАНИЕ про узлы: классика («Раху и Кету всегда ретроградны») описывает
+    СРЕДНИЙ узел (MEAN_NODE) — у него скорость всегда ≈ -0.053°/сут. Истинный
+    узел колеблется с периодом ~13.6 сут и часть времени идёт прямо (в 2024 —
+    ~25% дней, окнами по 0.1–7 сут, самые длинные у затмений). Мы отдаём то,
+    что реально считает эфемерида, а не догму: если фронту нужен «всегда
+    ретроградный» Раху — это вопрос смены TRUE_NODE на MEAN_NODE здесь, а не
+    подмены флага.
+
+    FLG_SPEED обязателен: без него swe.calc_ut возвращает в элементах 3..5
+    нули, а не производные. Возвращает (lon, speed_lon).
     """
     swe_ids = [swe.SUN, swe.MOON, swe.MARS, swe.MERCURY,
                swe.JUPITER, swe.VENUS, swe.SATURN,
                swe.TRUE_NODE, swe.TRUE_NODE]
-    pos, _ = swe.calc_ut(jd, swe_ids[planet_idx], swe.FLG_SWIEPH)
-    lon = pos[0]
+    pos, _ = swe.calc_ut(jd, swe_ids[planet_idx], swe.FLG_SWIEPH | swe.FLG_SPEED)
+    lon, speed = pos[0], pos[3]
     if planet_idx == 8:   # Кету = Раху + 180°
         lon = (lon + 180.0) % 360
-    return lon
+    return lon, speed
 
 
 def get_planet_positions(jd: float, aya: float) -> list:
@@ -143,13 +181,24 @@ def get_planet_positions(jd: float, aya: float) -> list:
     result = []
     for idx, p in enumerate(PLANETS):
         try:
-            trop = _planet_trop_swe(jd, idx)
+            trop, speed = _planet_trop_swe(jd, idx)
         except Exception as e:
             raise RuntimeError(f"SWE ошибка для {p['name']}: {e}") from e
 
         sid = (trop - aya) % 360
         sn, deg_in_sign = lon_to_sign(sid)
         nk = get_nk(sid)
+
+        # Ретроградность = отрицательная скорость по долготе.
+        # Скорость тропическая; сидерическая отличается на ход аянамши
+        # (~0.00004°/сут) — на знак это не влияет никогда.
+        never = p["name"] in NEVER_RETRO
+        retro = (speed < 0) and not never
+        stationary = (
+            not never
+            and abs(speed) < MEAN_DAILY_MOTION[p["name"]] * STATIONARY_FRACTION
+        )
+
         result.append({
             "idx":              idx,
             "name":             p["name"],
@@ -167,6 +216,9 @@ def get_planet_positions(jd: float, aya: float) -> list:
             "nakshatra_ru":     nk["ru"],
             "pada":             nk["pada"],
             "nk_lord":          nk["lord"],
+            "speed":            round(speed, 6),
+            "retro":            retro,
+            "is_stationary":    stationary,
         })
     return result
 
@@ -350,11 +402,16 @@ def print_result(res):
 
     # ── Планеты ───────────────────────────────────────────
     print(f"\n  ── ПЛАНЕТЫ ────────────────────────────────────────────────────")
-    hdr = f"  {'Планета':<12}{'Знак':<13}{'Градус':<12}{'Дом':<5}{'Накшатра':<18}{'Пада':<6}Владелец накш."
+    hdr = (f"  {'Планета':<12}{'Дв.':<5}{'Знак':<13}{'Градус':<12}{'Дом':<5}"
+           f"{'Накшатра':<18}{'Пада':<6}Владелец накш.")
     print(hdr)
-    print("  " + "─" * 72)
+    print("  " + "─" * 77)
     for p in res["planets"]:
+        motion = "℞" if p.get("retro") else "—"
+        if p.get("is_stationary"):
+            motion += "S"
         print(f"  {p['abbr']+' '+p['name']:<12}"
+              f"{motion:<5}"
               f"{p['sign_ru']:<13}"
               f"{p['deg_in_sign_dms']:<12}"
               f"{p['house']:<5}"
