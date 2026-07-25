@@ -29,25 +29,22 @@ PycharmProjects/Vedic) и где угодно ещё. Подробное опи�
 
 ## Подключение в Nuxt
 
-`content/` и `calculators/` лежат в корне репозитория, рядом с `frontend-nuxt/` —
-**не копируются внутрь фронтенда**, подключаются алиасами.
-
-1. Добавить алиасы в `frontend-nuxt/nuxt.config.ts`:
+`calculators/` и `content/` лежат **внутри** `frontend-nuxt/` и подключены
+алиасами (`nuxt.config.ts`):
 
 ```ts
-import { fileURLToPath } from 'node:url'
-
-export default defineNuxtConfig({
-  alias: {
-    '~calc': fileURLToPath(new URL('../calculators', import.meta.url)),
-    '~content': fileURLToPath(new URL('../content', import.meta.url)),
-  },
-})
+alias: {
+  '~calc':    fileURLToPath(new URL('./calculators', import.meta.url)),
+  '~content': fileURLToPath(new URL('./content', import.meta.url)),
+}
 ```
 
-2. JSON-импорты Nuxt/Vite понимает из коробки (`resolveJsonModule` уже включён
-   в tsconfig Nuxt).
-3. Использование в компоненте/composable:
+Внутрь фронтенда их пришлось перенести из корня репозитория: у Railway-сервиса
+фронта Root Directory = `frontend-nuxt/`, соседние каталоги в сборку не
+попадают. Подробности — в `docs/PLAN.md`.
+
+JSON-импорты Nuxt/Vite понимает из коробки (`resolveJsonModule` уже включён
+в tsconfig Nuxt). Использование:
 
 ```ts
 import { taraFor, scoreEvent, splitTithi, weekdayRu } from '~calc'

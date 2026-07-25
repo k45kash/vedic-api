@@ -18,7 +18,21 @@
 import json, re, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+
+
+def _repo_root(start):
+    """Корень репозитория — ближайший вверх каталог с .git."""
+    d = start
+    while True:
+        if os.path.isdir(os.path.join(d, ".git")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:            # дошли до / — не нашли
+            return start
+        d = parent
+
+
+REPO = _repo_root(HERE)
 
 # Исходник живёт в репозитории рядом с прототипами — из него собран весь content/.
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "prototype", "nakshatry_polnyy.html")

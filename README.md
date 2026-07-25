@@ -37,18 +37,21 @@
 │   └── router.py               #   сборка auth-роутов
 │
 ├── frontend-nuxt/              # фронтенд (Nuxt 3) — канонический UI
-│   ├── pages/                  #   index (накшатра), panchang, calendar, sade-sati
+│   ├── pages/                  #   публичные калькуляторы + кабинет (/me, /today)
+│   ├── layouts/                #   default.vue (публичные), app.vue (кабинет)
 │   ├── components/             #   BirthForm, CityField, LagnaChart
-│   ├── composables/            #   useApi, useBirthForm, useFormatters
-│   ├── layouts/default.vue     #   навигация и общие стили
-│   └── nuxt.config.ts          #   apiUrl, ssr:false, флаги сборки
+│   │   └── ui/                 #   UI-кит кабинета (22 компонента)
+│   ├── composables/            #   useApi, useAuth, useBirthProfile, useJyotish…
+│   ├── assets/css/tokens.css   #   дизайн-токены кабинета, светлая и тёмная темы
+│   ├── calculators/            #   трактовки традиции (TS, без фреймворка)
+│   ├── content/                #   контентная база джйотиша (34 JSON, 1,4 МБ)
+│   └── nuxt.config.ts          #   apiUrl, ssr:false, алиасы ~calc / ~content
 │
-├── calculators/                # трактовки традиции (TS, без фреймворка) — не подключены
-│   └── (tara/kuta/event-picker/sadhana/chart/nakshatra + api-adapter)
-├── content/                    # контентная база джйотиша (34 JSON, 1,4 МБ) — не подключена
-├── prototype/                  # кликабельные референсы UI (демо-данные, не прод-код)
-│   ├── index.html              #   текущий: тёмная «пергамент+золото», 6 вкладок
-│   └── v2.html                 #   проба нового светлого концепта: сайдбар, лаванда
+├── prototype/                  # референсы UI (демо-данные, не прод-код)
+│   ├── nakshatry_polnyy.html   #   ИСХОДНИК: из него собран весь content/
+│   ├── index.html              #   первый прототип: тёмный, 6 вкладок
+│   ├── v2.html                 #   структурная основа кабинета: сайдбар, лаванда
+│   └── concepte.png            #   визуальная концепция (не спецификация функций)
 │
 ├── ephe/                       # эфемериды Swiss Ephemeris (данные расчётов)
 │
@@ -59,10 +62,17 @@
 └── runtime.txt                 # python-3.11
 ```
 
-`calculators/` и `content/` — расчёты-трактовки и контент джйотиша поверх эфемерид
-(тара-бала, совместимость, подбор даты события и т.д.). Готовы, но пока не
-подключены к Nuxt — что уже сделано и что дальше см. [`docs/HANDOFF.md`](docs/HANDOFF.md),
-[`docs/COVERAGE.md`](docs/COVERAGE.md) и фазу в [`docs/PLAN.md`](docs/PLAN.md).
+`frontend-nuxt/calculators/` и `frontend-nuxt/content/` — расчёты-трактовки и
+контент джйотиша поверх эфемерид (тара-бала, совместимость, подбор даты события).
+Подключены через алиасы `~calc` / `~content`; тяжёлые JSON грузятся лениво.
+
+> Почему они **внутри** фронтенда, а не в корне: у Railway-сервиса фронта
+> Root Directory = `frontend-nuxt/`, и в сборку попадает только эта папка —
+> соседние каталоги репозитория недоступны. См. [`docs/PLAN.md`](docs/PLAN.md).
+
+Что из контента уже выведено в интерфейс, а что лежит без дела —
+[`docs/COVERAGE.md`](docs/COVERAGE.md); передаточная записка —
+[`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 ---
 

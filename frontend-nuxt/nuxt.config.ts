@@ -1,36 +1,20 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { fileURLToPath } from 'node:url'
 
-// Корень репозитория: content/ и calculators/ лежат РЯДОМ с frontend-nuxt/,
-// внутрь фронтенда они не копируются (см. docs/HANDOFF.md §2).
-const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+// content/ и calculators/ лежат ВНУТРИ frontend-nuxt/. Это вынужденно:
+// у Railway-сервиса фронта Root Directory = frontend-nuxt/, и в сборку
+// попадает только эта папка — соседние каталоги репозитория недоступны
+// (сборка падала с "Could not load /calculators/nakshatra"). См. PLAN.md.
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   ssr: false,
 
-  // Алиасы на внешние папки расчётов и контента (docs/HANDOFF.md §2).
-  // Работают и в dev, и в `nuxt generate`; глубокие пути тоже: '~calc/tara'.
+  // Алиасы на расчёты и контент. Глубокие пути тоже работают: '~calc/tara'.
+  // Папки внутри проекта, поэтому vite.server.fs.allow больше не нужен.
   alias: {
-    '~calc': fileURLToPath(new URL('../calculators', import.meta.url)),
-    '~content': fileURLToPath(new URL('../content', import.meta.url)),
-  },
-
-  vite: {
-    server: {
-      fs: {
-        // Vite в dev не отдаёт файлы выше корня проекта (frontend-nuxt/), а
-        // content/ и calculators/ лежат ВЫШЕ — иначе был бы 403
-        // "The request url is outside of Vite serving allow list".
-        //
-        // Проверено: сейчас это подстраховка, а не необходимость — Nuxt сам
-        // кладёт в allow свой workspaceDir, который для этого репозитория
-        // совпадает с корнем (определяется по .git). Vite конкатенирует
-        // пользовательский allow с nuxt'овым, так что запись безопасна и
-        // страхует от смены способа определения workspaceDir.
-        allow: [repoRoot],
-      },
-    },
+    '~calc': fileURLToPath(new URL('./calculators', import.meta.url)),
+    '~content': fileURLToPath(new URL('./content', import.meta.url)),
   },
   app: {
     head: {
