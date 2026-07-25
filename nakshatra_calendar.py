@@ -56,8 +56,15 @@ def fmt_range(dt_s: datetime, dt_e: datetime):
 # ═══════════════════════════════════════════════════════════
 
 def get_ayanamsha(jd: float) -> float:
+    """Аянамша с нутацией — см. пояснение в `nakshatra_calculator.get_aya`.
+
+    Коротко: `calc_ut` без FLG_SIDEREAL отдаёт видимую долготу (уже с
+    нутацией), поэтому вычитать надо аянамшу тоже с нутацией, иначе она
+    считается дважды. Здесь ошибка сдвигала моменты входа Луны в накшатру
+    примерно на 25 секунд.
+    """
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    return swe.get_ayanamsa_ut(jd)
+    return swe.get_ayanamsa_ex_ut(jd, swe.FLG_SWIEPH)[1]
 
 
 def moon_sid(jd: float, topo: bool = False, lat: float = 0.0, lon: float = 0.0) -> float:

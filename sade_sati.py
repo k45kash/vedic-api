@@ -73,8 +73,13 @@ BOUNDARY_CHECK_DEG = 1.0
 # ═══════════════════════════════════════════════════════════
 
 def get_aya(jd: float) -> float:
+    """Аянамша с нутацией — см. пояснение в `nakshatra_calculator.get_aya`.
+
+    Сатурн идёт ~2′ в сутки, поэтому лишние 13″ сдвигали момент смены знака
+    почти на три часа — а от этого зависят границы Сад-сати.
+    """
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    return swe.get_ayanamsa_ut(jd)
+    return swe.get_ayanamsa_ex_ut(jd, swe.FLG_SWIEPH)[1]
 
 
 def saturn_sid(jd: float) -> float:

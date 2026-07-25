@@ -169,7 +169,10 @@ def debug():
     swe.set_sid_mode(swe.SIDM_LAHIRI)
     now = datetime.now(timezone.utc)
     jd_now = swe.julday(now.year, now.month, now.day, now.hour + now.minute / 60)
-    aya_now = swe.get_ayanamsa_ut(jd_now)
+    # С нутацией — ровно то значение, которое вычитают расчётные модули
+    # (см. `nakshatra_calculator.get_aya`). Диагностика обязана показывать
+    # используемое число, иначе при разборе расхождений она уводит в сторону.
+    aya_now = swe.get_ayanamsa_ex_ut(jd_now, swe.FLG_SWIEPH)[1]
     return {
         "python": sys.version,
         "ephe_path": EPHE_PATH,
