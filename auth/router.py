@@ -1,12 +1,15 @@
 """Сборка auth-роутов в один APIRouter.
 
 Фундамент: JWT login/logout, регистрация, сброс/подтверждение пароля,
-управление своим профилем. Соц-провайдеры (VK / Yandex / Google) и
-Telegram-эндпоинт подключаются здесь же — см. TODO ниже.
+управление своим профилем. Плюс соц-логины (OAuth2: Yandex / VK / Google),
+вход через Telegram (не OAuth — Login Widget + HMAC) и админские операции.
 """
 from fastapi import APIRouter
 
+from .admin import router as admin_router
 from .models import UserCreate, UserRead, UserUpdate
+from .oauth import router as oauth_router
+from .telegram import router as telegram_router
 from .users import auth_backend, fastapi_users
 
 router = APIRouter()
@@ -42,7 +45,15 @@ router.include_router(
     tags=["users"],
 )
 
-# TODO (следующий шаг): соц-провайдеры
-#   - Yandex / Google: fastapi_users.get_oauth_router(client, auth_backend, secret)
-#   - VK: кастомный httpx-oauth клиент → тот же get_oauth_router
-#   - Telegram: отдельный POST /auth/telegram (проверка HMAC по bot-токену)
+# Соц-логины: GET /auth/providers, /auth/{provider}/authorize и /callback.
+# Пути заданы внутри модуля целиком, поэтому без prefix. Провайдеры без
+# настроек просто не регистрируются.
+router.include_router(oauth_router)
+
+# Вход через Telegram: POST /auth/telegram (prefix задан внутри модуля).
+# Работает только если задан TELEGRAM_BOT_TOKEN, иначе отдаёт 503.
+router.include_router(telegram_router)
+
+# Админские операции: GET /admin/users, PATCH /admin/users/{id}.
+# Единственное место, где меняются plan и role.
+router.include_router(admin_router)
