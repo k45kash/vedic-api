@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>На сверку с астрологом — Jyotish</title>
+<style>
+  /* Токены — те же, что в кабинете (frontend-nuxt/assets/css/tokens.css) */
+  :root{
+    --page:#f4f3f9; --surface:#ffffff; --surface-2:#faf9fd; --surface-3:#f2f0fa;
+    --line:#eae8f3; --line-2:#ddd9ec;
+    --ink:#20233a; --body:#565b73; --muted:#8b90a6;
+    --accent:#6d5bd0; --accent-ink:#5341b8; --accent-soft:#f0edfc; --accent-line:#ded7f7;
+    --gold:#a97f2b; --gold-ink:#8a6412; --gold-soft:#faf4e6; --gold-line:#ecdcb6;
+    --good:#3f7d52; --good-soft:#eef6f0; --good-line:#cde3d4;
+    --bad:#b0455a;  --bad-soft:#fdeef1;  --bad-line:#f2ccd4;
+    --neu:#3f6f96;  --neu-soft:#eef4f9;  --neu-line:#cfdfec;
+    --sh-sm:0 1px 2px rgba(24,26,42,.04);
+    --sh-md:0 1px 2px rgba(24,26,42,.04), 0 10px 28px -16px rgba(24,26,42,.22);
+    --r-sm:10px; --r-md:14px; --r-lg:18px; --r-pill:999px;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--page);color:var(--body);
+    font-family:var(--sans);font-size:15.5px;line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px;
+        display:grid;grid-template-columns:232px 1fr;gap:40px;align-items:start}
+
+  /* ── Шапка ───────────────────────────────── */
+  header.top{grid-column:1/-1;padding:44px 0 30px;border-bottom:1px solid var(--line);margin-bottom:34px}
+  .eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  h1{font-family:var(--serif);font-weight:400;font-size:38px;line-height:1.15;
+     color:var(--ink);margin:10px 0 12px;letter-spacing:.2px}
+  .lede{max-width:660px;font-size:16px}
+  .meta{margin-top:16px;font-size:13px;color:var(--muted)}
+
+  /* ── Оглавление ──────────────────────────── */
+  nav.toc{position:sticky;top:24px}
+  .toc h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+          color:var(--muted);margin:0 0 12px;font-weight:600}
+  .toc ol{list-style:none;margin:0 0 22px;padding:0}
+  .toc li{margin:0 0 2px}
+  .toc a{display:block;padding:6px 10px;border-radius:var(--r-sm);
+         color:var(--body);text-decoration:none;font-size:13.5px;
+         transition:background .15s,color .15s}
+  .toc a:hover{background:var(--surface-3);color:var(--ink)}
+  .toc a .n{color:var(--muted);margin-right:7px;font-variant-numeric:tabular-nums}
+  .toc a.crit .n{color:var(--gold)}
+
+  /* ── Секции ──────────────────────────────── */
+  section.part{margin:0 0 46px}
+  .part__head{margin:0 0 18px}
+  .part__kicker{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);font-weight:600}
+  .part__title{font-family:var(--serif);font-weight:400;font-size:26px;color:var(--ink);margin:6px 0 8px}
+  .part__note{font-size:14.5px;color:var(--muted);max-width:680px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+        padding:24px 26px;margin:0 0 16px;box-shadow:var(--sh-sm)}
+  .card--crit{border-color:var(--gold-line);background:linear-gradient(180deg,var(--gold-soft),var(--surface) 90px)}
+
+  .card__head{display:flex;align-items:baseline;gap:12px;margin:0 0 12px;flex-wrap:wrap}
+  .tag{flex:none;display:inline-grid;place-items:center;min-width:34px;height:24px;padding:0 8px;
+       border-radius:var(--r-pill);background:var(--accent-soft);color:var(--accent-ink);
+       font-size:12px;font-weight:700;letter-spacing:.02em}
+  .card--crit .tag{background:var(--gold-line);color:var(--gold-ink)}
+  h3{font-family:var(--serif);font-weight:400;font-size:21px;color:var(--ink);margin:0;line-height:1.25}
+  .flag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;
+        color:var(--gold-ink);background:var(--gold-soft);border:1px solid var(--gold-line);
+        padding:3px 9px;border-radius:var(--r-pill)}
+
+  p{margin:0 0 12px}
+  .card p:last-child{margin-bottom:0}
+  strong{color:var(--ink);font-weight:600}
+  ul{margin:0 0 12px;padding-left:20px}
+  li{margin:0 0 5px}
+
+  /* Блоки «что сделано / нужно от вас» */
+  .box{border-radius:var(--r-md);padding:13px 16px;margin:14px 0 0;font-size:14.5px}
+  .box b{display:block;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+         margin-bottom:5px;font-weight:700}
+  .box--done{background:var(--surface-2);border:1px solid var(--line)}
+  .box--done b{color:var(--muted)}
+  .box--ask{background:var(--accent-soft);border:1px solid var(--accent-line)}
+  .box--ask b{color:var(--accent-ink)}
+  .box--cost{background:var(--neu-soft);border:1px solid var(--neu-line)}
+  .box--cost b{color:var(--neu)}
+
+  /* Таблицы */
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  th{text-align:left;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+     color:var(--muted);font-weight:600;padding:0 14px 9px 0;border-bottom:1px solid var(--line-2)}
+  td{padding:10px 14px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.was{color:var(--bad)}
+  td.now{color:var(--good);font-weight:600}
+  .tbl-wrap{overflow-x:auto}
+
+  /* Часть В — «не трогали» */
+  .keep{background:var(--good-soft);border:1px solid var(--good-line);
+        border-radius:var(--r-lg);padding:22px 26px}
+  .keep h3{margin-bottom:10px}
+  .keep ul{columns:2;column-gap:34px;margin-bottom:12px}
+  .keep li{break-inside:avoid}
+
+  footer{grid-column:1/-1;margin-top:20px;padding-top:22px;border-top:1px solid var(--line);
+         font-size:13px;color:var(--muted)}
+
+  /* ── Адаптив ─────────────────────────────── */
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr;gap:0}
+    nav.toc{position:static;margin-bottom:30px}
+    .toc ol{columns:2;column-gap:20px}
+    .keep ul{columns:1}
+    h1{font-size:30px}
+  }
+
+  /* ── Печать ──────────────────────────────── */
+  @media print{
+    body{background:#fff;font-size:11pt}
+    .wrap{display:block;max-width:none;padding:0}
+    nav.toc{display:none}
+    .card{break-inside:avoid;box-shadow:none;border-color:#ddd}
+    section.part{break-before:auto}
+    a{color:inherit;text-decoration:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="eyebrow">Ведический сервис · документ для специалиста</div>
+    <h1>На сверку с астрологом</h1>
+    <p class="lede">Здесь только то, что требует профессионального решения: спорные методики
+      и отличия от исходной версии. Технические детали и ход работ опущены намеренно.</p>
+    <p class="meta">25 июля 2026 · везде уже выбран рабочий вариант, сервис не ждёт ответов —
+      но выбор делался по доступным источникам, а не экспертно, и любой из них меняется одной правкой.</p>
+  </header>
+
+  <nav class="toc">
+    <h2>Часть А · нужно решение</h2>
+    <ol>
+      <li><a class="crit" href="#a1"><span class="n">А1</span>Нади: текст или доша</a></li>
+      <li><a href="#a2"><span class="n">А2</span>Лунные узлы</a></li>
+      <li><a href="#a3"><span class="n">А3</span>Длина года в дашах</a></li>
+      <li><a href="#a4"><span class="n">А4</span>Раху-калам и прочие</a></li>
+      <li><a href="#a5"><span class="n">А5</span>Ашта-кута: спорное</a></li>
+      <li><a href="#a6"><span class="n">А6</span>Гана: симметрия</a></li>
+      <li><a href="#a7"><span class="n">А7</span>Йони: упрощение</a></li>
+      <li><a href="#a8"><span class="n">А8</span>27-я накшатра</a></li>
+      <li><a href="#a9"><span class="n">А9</span>Веса подбора дня</a></li>
+    </ol>
+    <h2>Часть Б · что изменено</h2>
+    <ol>
+      <li><a class="crit" href="#b1"><span class="n">Б1</span>Источник нади</a></li>
+      <li><a href="#b2"><span class="n">Б2</span>Титхи словом</a></li>
+      <li><a href="#b3"><span class="n">Б3</span>Гандантовые</a></li>
+      <li><a href="#b4"><span class="n">Б4</span>Кута 21 → 36</a></li>
+      <li><a href="#b5"><span class="n">Б5</span>Новые расчёты</a></li>
+      <li><a href="#b6"><span class="n">Б6</span>Чего не показываем</a></li>
+    </ol>
+    <h2>Часть В</h2>
+    <ol><li><a href="#v"><span class="n">В</span>Чего не касались</a></li></ol>
+  </nav>
+
+  <main>
+
+  <!-- ══════════ ЧАСТЬ А ══════════ -->
+  <section class="part">
+    <div class="part__head">
+      <div class="part__kicker">Часть А</div>
+      <div class="part__title">Вопросы, где нужно ваше решение</div>
+    </div>
+
+    <article class="card card--crit" id="a1">
+      <div class="card__head"><span class="tag">А1</span>
+        <h3>Нади: считать по тексту или по доше?</h3>
+        <span class="flag">самое важное</span></div>
+      <p>В исходных данных нади для каждой накшатры записана <strong>дважды и по-разному</strong>:
+        текстом в описании совместимости («Нади — Ади», «Нади — Анта/Антья») и отдельным
+        полем «доша» в аюрведической номенклатуре (Вата, Питта, Капха).</p>
+      <p>Эти два источника <strong>расходятся у девяти накшатр</strong>:</p>
+      <div class="tbl-wrap"><table>
+        <tr><th>Накшатра</th><th>В тексте</th><th>По доше</th></tr>
+        <tr><td>Мригашира</td><td class="was">Ади</td><td class="now">Мадхья (Питта)</td></tr>
+        <tr><td>Ардра</td><td class="was">Мадхья</td><td class="now">Ади (Вата)</td></tr>
+        <tr><td>Пушья</td><td class="was">Ади</td><td class="now">Мадхья (Питта)</td></tr>
+        <tr><td>Ашлеша</td><td class="was">Ади</td><td class="now">Антья (Капха)</td></tr>
+        <tr><td>Магха</td><td class="was">Ади</td><td class="now">Антья (Капха)</td></tr>
+        <tr><td>Уттара Пхалгуни</td><td class="was">Антья</td><td class="now">Ади (Вата)</td></tr>
+        <tr><td>Вишакха</td><td class="was">Ади</td><td class="now">Антья (Капха)</td></tr>
+        <tr><td>Уттара Ашадха</td><td class="was">Ади</td><td class="now">Антья (Капха)</td></tr>
+        <tr><td>Пурва Бхадрапада</td><td class="was">Антья</td><td class="now">Ади (Вата)</td></tr>
+      </table></div>
+      <div class="box box--done"><b>Что сделано</b>
+        Сейчас берётся поле доши: оно полностью совпадает с канонической схемой
+        (Ади‑Мадхья‑Антья / Антья‑Мадхья‑Ади по группам), а текст с ней расходится.</div>
+      <div class="box box--cost"><b>Цена вопроса</b>
+        Нади — самая дорогая кута, 8 баллов из 36. Смена источника изменила результат
+        у <strong>230 пар из 729</strong>, причём в 108 случаях нади‑доша раньше не находилась
+        вовсе — сервис сообщал об отсутствии препятствий там, где традиция видит серьёзное.</div>
+      <div class="box box--ask"><b>Нужно от вас</b>
+        Подтвердить, какой источник верен. Если верен текст — вернём его одной правкой.</div>
+    </article>
+
+    <article class="card" id="a2">
+      <div class="card__head"><span class="tag">А2</span><h3>Лунные узлы: истинные или средние?</h3></div>
+      <p>Расчёт ведётся по <strong>истинному</strong> узлу. По нему Раху и Кету идут прямо
+        примерно четверть времени — за 2024 год 92 дня из 366, и самые длинные окна пришлись
+        на затмения. При этом в описаниях ретроградности написано, что «Раху и Кету всегда
+        ретроградны по своей природе».</p>
+      <div class="box box--done"><b>Что сделано</b>
+        Сервис показывает то, что даёт расчёт, — то есть иногда отмечает узлы как идущие
+        прямо. Текст описаний не трогали.</div>
+      <div class="box box--ask"><b>Нужно от вас</b>
+        Либо переключить расчёт на средний узел — тогда «всегда ретроградны» станет правдой,
+        либо поправить формулировку в описании.</div>
+    </article>
+
+    <article class="card" id="a3">
+      <div class="card__head"><span class="tag">А3</span><h3>Длина года в Вимшоттари: 365,25 или 360 суток?</h3></div>
+      <p>Классические ручные методики считают савана-годом в 360 суток, современные
+        программы — солнечным.</p>
+      <div class="box box--done"><b>Что сделано</b>
+        Взято 365,25: публичные калькуляторы дают длительности, кратные именно этому
+        значению, и при проверке в стороннем сервисе человек увидит те же даты.</div>
+      <div class="box box--cost"><b>Цена вопроса</b>
+        Вариант с 360 сдвинул бы конец текущего периода Юпитера на контрольной карте
+        примерно на полгода.</div>
+    </article>
+
+    <article class="card" id="a4">
+      <div class="card__head"><span class="tag">А4</span><h3>Раху-калам, Гулика-калам, Ямаганда</h3></div>
+      <div class="box box--done"><b>Что сделано</b>
+        Светлое время суток делится на восемь равных частей, номер части задаётся днём недели.
+        В интерфейсе стоит пометка, что это распространённый метод, а не единственный.</div>
+      <p style="margin-top:14px">Расхождения школ, которые мы <strong>не разрешали</strong>:</p>
+      <ul>
+        <li>точка отсчёта — восход или иное начало суток;</li>
+        <li>схема для Гулики: порядок частей по дням недели;</li>
+        <li>ночная схема — сейчас считаем только дневную.</li>
+      </ul>
+    </article>
+
+    <article class="card" id="a5">
+      <div class="card__head"><span class="tag">А5</span><h3>Ашта-кута: где школы расходятся</h3></div>
+      <p>Расчёт достроен с 21 до полных 36 баллов. Места, где пришлось выбирать:</p>
+      <div class="tbl-wrap"><table>
+        <tr><th>Место</th><th>Что выбрано</th><th>Альтернатива</th></tr>
+        <tr><td>Вашья — три клетки: чатушпада × ваначара, ваначара × джалачара, кита × нара</td>
+            <td>вариант распространённого калькулятора</td><td>другие таблицы дают иные значения</td></tr>
+        <tr><td>Граха-майтри</td><td>натуральная (наисаргика) дружба планет</td>
+            <td>композитная (панчадха) с временными отношениями</td></tr>
+        <tr><td>Бхакут-доша</td><td>балл строго 0, отмена показывается текстом</td>
+            <td>часть школ при отмене возвращает все 7 баллов</td></tr>
+        <tr><td>Варна при «низкой» варне жениха</td><td>основное правило по стихии знака</td>
+            <td>часть школ пересчитывает по управителям раши</td></tr>
+      </table></div>
+      <p>Отдельно про <strong>таблицы Вашьи</strong>: они снимались с работающего калькулятора,
+        а не из публикаций. Опубликованные таблицы противоречат друг другу, а самая
+        растиражированная содержит очевидную опечатку — печатает 1,5 там, где её же
+        собственный текст говорит о половине балла.</p>
+    </article>
+
+    <article class="card" id="a6">
+      <div class="card__head"><span class="tag">А6</span><h3>Гана-кута: симметрия</h3></div>
+      <p>В нашей таблице гана-кута симметрична — результат не зависит от того, кто жених,
+        а кто невеста. Классически она <strong>несимметрична</strong>: Дэва (невеста) +
+        Манушья (жених) и обратная комбинация дают разные баллы; то же с парой Дэва / Ракшаса.</p>
+      <div class="box box--done"><b>Что сделано</b>
+        Оставлена симметричная таблица из исходных данных.</div>
+      <div class="box box--ask"><b>Нужно от вас</b>
+        Подтвердить её или дать правильную несимметричную.</div>
+    </article>
+
+    <article class="card" id="a7">
+      <div class="card__head"><span class="tag">А7</span><h3>Йони-кута: упрощение</h3></div>
+      <p>Считается по признаку «одна йони / враждебные / разные», без полной матрицы 14 × 14
+        с градациями. Упрощение пришло из исходной версии и сохранено.</p>
+      <div class="box box--ask"><b>Нужно от вас</b>
+        Полная матрица даст более тонкий результат — если она у вас есть, подключим.</div>
+    </article>
+
+    <article class="card" id="a8">
+      <div class="card__head"><span class="tag">А8</span><h3>Правило 27-й накшатры в тара-бале</h3></div>
+      <p>В исходных данных есть правило: 27-я накшатра от Джанмы рекомендуется к избеганию,
+        даже если тара формально благоприятна. Там же стоит пометка самого автора —
+        «до уточнения по первоисточникам». Ряд школ называет в этой роли 22-ю или 23-ю.</p>
+      <div class="box box--done"><b>Что сделано</b>
+        Правило сохранено как есть и помечено в интерфейсе как метод школы.</div>
+    </article>
+
+    <article class="card" id="a9">
+      <div class="card__head"><span class="tag">А9</span><h3>Веса подбора благоприятного дня</h3></div>
+      <p>Оценка дня складывается из факторов с весами: тара-бала 4, накшатра 3, титхи 2,
+        день недели 2, йога 1. Стоп-факторы не просто вычитают баллы, а ограничивают итог
+        сверху. Это модель из исходной версии, не канон — в интерфейсе так и написано.</p>
+      <div class="box box--ask"><b>Нужно от вас</b>
+        Подтвердить веса или предложить свои.</div>
+    </article>
+  </section>
+
+  <!-- ══════════ ЧАСТЬ Б ══════════ -->
+  <section class="part">
+    <div class="part__head">
+      <div class="part__kicker">Часть Б</div>
+      <div class="part__title">Что изменено относительно исходной версии</div>
+      <p class="part__note">Исходник — файл <code>nakshatry_polnyy.html</code>. Всё ниже —
+        сознательные изменения, каждое обратимо.</p>
+    </div>
+
+    <article class="card card--crit" id="b1">
+      <div class="card__head"><span class="tag">Б1</span><h3>Источник нади</h3>
+        <span class="flag">по сути расчёта</span></div>
+      <p>Исходная версия брала нади из текста описания. Мы перешли на поле доши.
+        Подробности, таблица расхождений и цифры влияния — в пункте А1.
+        <strong>Это самое существенное изменение по сути расчёта.</strong></p>
+    </article>
+
+    <article class="card" id="b2">
+      <div class="card__head"><span class="tag">Б2</span><h3>Титхи, записанные словом, теперь учитываются</h3></div>
+      <p>В справочнике событий часть правил записана не номером, а названием: «Амавасья»,
+        «Пурнима», «Пурнима (по ряду школ)». Исходная версия сверяла титхи только по числу,
+        поэтому такие правила <strong>молча игнорировались</strong> — всего 42 записи по всем
+        событиям.</p>
+      <div class="box box--cost"><b>Как это выглядело на практике</b>
+        Стрижка на новолуние получала 73 % и вердикт «благоприятна», хотя в данных Амавасья
+        стоит в списке избегаемых именно для стрижки.</div>
+      <p style="margin-top:14px">Теперь правила работают. Новолуние и полнолуние — это одна
+        и та же пятнадцатая титхи, различаются пакшей, что и учтено.</p>
+    </article>
+
+    <article class="card" id="b3">
+      <div class="card__head"><span class="tag">Б3</span><h3>Категория «гандантовые» распознаётся</h3></div>
+      <p>В списках избегаемых накшатр у ряда событий стоит не название, а категория
+        «гандантовые». Исходная версия сверяла только по названиям, поэтому правило не
+        срабатывало. Теперь разворачивается в шесть накшатр на стыках водных и огненных знаков.</p>
+    </article>
+
+    <article class="card" id="b4">
+      <div class="card__head"><span class="tag">Б4</span><h3>Ашта-кута: 21 → 36 баллов</h3></div>
+      <p>Исходная версия считала четыре куты из восьми — Гана, Йони, Тара, Нади. Добавлены
+        остальные четыре: Варна, Вашья, Граха-майтри, Бхакут. Спорные места — в пункте А5.
+        Прежний частичный расчёт сохранён без изменений и работает как раньше.</p>
+    </article>
+
+    <article class="card" id="b5">
+      <div class="card__head"><span class="tag">Б5</span><h3>Добавлены расчёты, которых в исходнике не было</h3></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Что</th><th>Было в исходнике</th><th>Стало</th></tr>
+        <tr><td>Нитья-йога</td><td class="was">описания есть, расчёта нет</td><td class="now">считается</td></tr>
+        <tr><td>Карана</td><td class="was">описания есть, расчёта нет</td><td class="now">считается, включая Бхадру (Вишти)</td></tr>
+        <tr><td>Вимшоттари-даши</td><td class="was">нет</td><td class="now">маха-даши и антар-даши</td></tr>
+        <tr><td>Ретроградность планет</td><td class="was">нет</td><td class="now">флаг + признак станции</td></tr>
+        <tr><td>Раху / Гулика / Ямаганда</td><td class="was">описания есть, времени нет</td><td class="now">время считается</td></tr>
+      </table></div>
+    </article>
+
+    <article class="card" id="b6">
+      <div class="card__head"><span class="tag">Б6</span><h3>Чего мы не показываем, хотя это было в макете</h3></div>
+      <p>В визуальном макете нарисованы вещи, под которые нет ни данных, ни методики.
+        Мы их не выдумывали:</p>
+      <ul>
+        <li>«Общая энергия дня 8,2 из 10» и оценки «для вас: 8/10» у каждого элемента панчанги;</li>
+        <li>«рейтинг дня по сферам» — работа, деньги, отношения, здоровье и так далее.</li>
+      </ul>
+      <div class="box box--ask"><b>Нужно от вас</b>
+        Если такая модель нужна — её надо проектировать отдельно: что именно складывается
+        в цифру и на каком основании.</div>
+    </article>
+  </section>
+
+  <!-- ══════════ ЧАСТЬ В ══════════ -->
+  <section class="part" id="v">
+    <div class="part__head">
+      <div class="part__kicker">Часть В</div>
+      <div class="part__title">Чего мы не касались</div>
+    </div>
+    <div class="keep">
+      <h3>Ваша работа сохранена дословно</h3>
+      <ul>
+        <li>все трактовки и тексты: накшатры, пады, планеты в накшатрах, дома, знаки, положения;</li>
+        <li>катхи, мантры, упайи, глоссарий;</li>
+        <li>таблицы тара-балы и логика её расчёта;</li>
+        <li>таблицы йони и ганы — использованы как есть;</li>
+        <li>дисклеймеры достоверности — выводятся из ваших формулировок;</li>
+        <li>список событий мухурты и их справочные списки.</li>
+      </ul>
+      <p>Правки касались только того, <strong>как</strong> данные читаются и считаются, а не
+        их содержания. Единственное исключение — пункт А1, где пришлось выбирать между двумя
+        противоречащими записями внутри самих данных.</p>
+    </div>
+  </section>
+
+  </main>
+
+  <footer>
+    Документ подготовлен 25 июля 2026. Текстовая версия — <code>docs/ASTROLOGER-REVIEW.md</code>.
+  </footer>
+</div>
+</body>
+</html>
