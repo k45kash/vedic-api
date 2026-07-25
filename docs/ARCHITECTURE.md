@@ -210,8 +210,8 @@ auth/router.py    сборка роутов; сюда же подключают�
 
 | Провайдер | Механизм | Реализация |
 |-----------|----------|-----------|
-| Yandex, Google | OAuth2 | встроенные клиенты `httpx-oauth` |
-| VK (VK ID) | OAuth2 | свой клиент — наследник `BaseOAuth2` |
+| Google | OAuth2 | встроенный клиент `httpx-oauth` |
+| Yandex, VK | OAuth2 | свои клиенты — наследники `BaseOAuth2` (готовых в `httpx-oauth` нет) |
 | **Telegram** | **не OAuth2** | Login Widget + проверка подписи HMAC-SHA256 по токену бота |
 
 Telegram — отдельный случай: у него нет redirect-потока. Виджет отдаёт

@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jyotish — прототип v2 (светлая тема)</title>
+<style>
+  /* ===================== ДИЗАЙН-ТОКЕНЫ =====================
+     База — концепт светлой темы: белые карточки, лавандовый акцент, гротеск.
+     Сакральный слой — серифный заголовок, деванагари, золото как вторичный акцент. */
+  :root{
+    --page:#f4f3f9;
+    --surface:#ffffff;
+    --surface-2:#faf9fd;
+    --surface-3:#f2f0fa;
+    --line:#eae8f3;
+    --line-2:#ddd9ec;
+
+    --ink:#20233a;
+    --body:#565b73;
+    --muted:#8b90a6;
+
+    --accent:#6d5bd0;
+    --accent-ink:#5341b8;
+    --accent-soft:#f0edfc;
+    --accent-line:#ded7f7;
+
+    --gold:#a97f2b;
+    --gold-ink:#8a6412;
+    --gold-soft:#faf4e6;
+    --gold-line:#ecdcb6;
+
+    --good:#3f7d52; --good-soft:#eef6f0; --good-line:#cde3d4;
+    --bad:#b0455a;  --bad-soft:#fdeef1;  --bad-line:#f2ccd4;
+    --neu:#3f6f96;  --neu-soft:#eef4f9;  --neu-line:#cfdfec;
+
+    --sh-sm:0 1px 2px rgba(24,26,42,.04);
+    --sh-md:0 1px 2px rgba(24,26,42,.04), 0 10px 28px -16px rgba(24,26,42,.22);
+    --sh-lg:0 2px 6px rgba(24,26,42,.05), 0 22px 48px -24px rgba(38,28,90,.28);
+
+    --r-sm:10px; --r-md:14px; --r-lg:18px; --r-pill:999px;
+    --d-fast:150ms; --d-med:250ms; --e-out:cubic-bezier(.2,.7,.3,1);
+
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --side-w:260px;
+  }
+  :root[data-theme="dark"]{
+    --page:#101119;
+    --surface:#191b26;
+    --surface-2:#1f2130;
+    --surface-3:#242739;
+    --line:#282b3c;
+    --line-2:#353950;
+
+    --ink:#eceaf5;
+    --body:#a5aabf;
+    --muted:#767c94;
+
+    --accent:#9b8af0;
+    --accent-ink:#b3a5f7;
+    --accent-soft:rgba(124,105,232,.16);
+    --accent-line:rgba(124,105,232,.34);
+
+    --gold:#d9b25f;
+    --gold-ink:#e6c884;
+    --gold-soft:rgba(217,178,95,.12);
+    --gold-line:rgba(217,178,95,.3);
+
+    --good:#7fb08f; --good-soft:rgba(127,176,143,.12); --good-line:rgba(127,176,143,.3);
+    --bad:#d4808f;  --bad-soft:rgba(212,128,143,.12);  --bad-line:rgba(212,128,143,.3);
+    --neu:#7fa8c9;  --neu-soft:rgba(127,168,201,.12);  --neu-line:rgba(127,168,201,.3);
+
+    --sh-sm:0 1px 2px rgba(0,0,0,.3);
+    --sh-md:0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+    --sh-lg:0 2px 6px rgba(0,0,0,.35), 0 22px 48px -24px rgba(0,0,0,.7);
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--page);color:var(--body);
+    font-family:var(--sans);font-size:15px;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background var(--d-med) var(--e-out),color var(--d-med) var(--e-out);
+  }
+  a{color:var(--accent-ink);text-decoration:none}
+  a:hover{text-decoration:underline}
+  button{font:inherit}
+  :where(a,button,input,select,summary):focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px;border-radius:6px;
+  }
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+
+  /* ===================== КАРКАС ===================== */
+  .app{display:grid;grid-template-columns:var(--side-w) 1fr;min-height:100%}
+
+  /* --- сайдбар --- */
+  .side{
+    position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;
+    padding:22px 16px 18px;background:var(--surface);border-right:1px solid var(--line);
+  }
+  .logo{display:flex;align-items:center;gap:11px;padding:2px 8px 22px}
+  .logo__mark{width:38px;height:38px;flex:none;color:var(--accent)}
+  .logo__name{font-family:var(--serif);font-size:21px;line-height:1.1;color:var(--ink);letter-spacing:.2px}
+  .logo__sub{font-size:11px;letter-spacing:.06em;color:var(--muted);margin-top:2px}
+
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav__item{
+    display:flex;align-items:center;gap:12px;width:100%;
+    padding:10px 12px;border:0;border-radius:var(--r-md);
+    background:transparent;color:var(--body);font-size:14.5px;text-align:left;cursor:pointer;
+    transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+  }
+  .nav__item svg{width:19px;height:19px;flex:none;color:var(--muted);transition:color var(--d-fast) var(--e-out)}
+  .nav__item:hover{background:var(--surface-3);color:var(--ink)}
+  .nav__item:hover svg{color:var(--body)}
+  .nav__item.is-on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+  .nav__item.is-on svg{color:var(--accent)}
+  .nav__item[disabled]{opacity:.55;cursor:default}
+  .nav__item[disabled]:hover{background:transparent;color:var(--body)}
+  .nav__soon{margin-left:auto;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+  .side__spacer{flex:1}
+  .promo{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:16px;margin-bottom:14px;
+  }
+  .promo__head{display:flex;align-items:center;gap:8px;color:var(--ink);font-weight:600;font-size:14px}
+  .promo__head svg{width:17px;height:17px;color:var(--gold)}
+  .promo__text{font-size:12.5px;color:var(--muted);margin:8px 0 13px;line-height:1.45}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    border:0;border-radius:var(--r-sm);padding:9px 16px;
+    background:var(--accent);color:#fff;font-size:13.5px;font-weight:600;cursor:pointer;
+    transition:background var(--d-fast) var(--e-out),transform var(--d-fast) var(--e-out);
+  }
+  .btn:hover{background:var(--accent-ink)}
+  .btn:active{transform:translateY(1px)}
+  .btn--ghost{background:transparent;color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent-line)}
+  .btn--ghost:hover{background:var(--accent-soft)}
+
+  .help{display:flex;align-items:center;gap:11px;padding:6px 8px;font-size:12.5px;color:var(--muted)}
+  .help svg{width:28px;height:28px;padding:5px;border-radius:50%;background:var(--surface-3);color:var(--accent);flex:none}
+  .help b{display:block;color:var(--ink);font-size:13px;font-weight:600}
+  .help a{font-size:12.5px}
+
+  /* --- шапка контента --- */
+  .main{min-width:0;display:flex;flex-direction:column}
+  .topbar{
+    position:sticky;top:0;z-index:9;display:flex;align-items:center;gap:16px;
+    padding:20px 32px;background:color-mix(in srgb,var(--page) 86%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+  }
+  .topbar__title{font-family:var(--serif);font-size:23px;color:var(--ink);margin:0;font-weight:400;letter-spacing:.2px}
+  .topbar__sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .topbar__sub a{color:var(--accent-ink);margin-left:6px}
+  .topbar__spacer{flex:1}
+  /* .iconbtn ниже задаёт display:grid — гасим бургер через тот же вес правила */
+  .iconbtn.burger{display:none}
+
+  .seg{display:inline-flex;gap:2px;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill)}
+  .seg button{
+    border:0;background:transparent;color:var(--muted);font-size:12.5px;font-weight:500;
+    padding:6px 14px;border-radius:var(--r-pill);cursor:pointer;
+    transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+  }
+  .seg button:hover{color:var(--ink)}
+  .seg button.is-on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+  .seg--side{display:none;margin:14px 2px 0}
+  .seg--side button{flex:1;text-align:center}
+
+  .iconbtn{
+    width:40px;height:40px;display:grid;place-items:center;flex:none;
+    border:1px solid var(--line);background:var(--surface);color:var(--body);
+    border-radius:var(--r-md);cursor:pointer;
+    transition:border-color var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+  }
+  .iconbtn:hover{border-color:var(--line-2);color:var(--ink)}
+  .iconbtn svg{width:19px;height:19px}
+  .avatar{
+    width:40px;height:40px;flex:none;border-radius:50%;display:grid;place-items:center;
+    background:var(--accent-soft);color:var(--accent-ink);font-weight:600;font-size:14px;
+    box-shadow:inset 0 0 0 1px var(--accent-line);
+  }
+
+  .content{padding:24px 32px 56px;max-width:1240px;width:100%}
+
+  /* ===================== ПРИМИТИВЫ ===================== */
+  .panel{display:none}
+  .panel.is-on{display:block;animation:rise var(--d-med) var(--e-out)}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:20px 22px;box-shadow:var(--sh-sm);
+  }
+  .card--flat{box-shadow:none}
+  .card__head{display:flex;align-items:center;gap:10px;margin:-2px 0 16px}
+  .card__title{font-size:16px;font-weight:600;color:var(--ink);margin:0}
+  .card__link{margin-left:auto;font-size:13px;color:var(--accent-ink);font-weight:500}
+
+  .sechead{
+    font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--muted);margin:30px 0 12px;display:flex;align-items:center;gap:9px;
+  }
+  .sechead:first-child{margin-top:0}
+  .flag{
+    font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+    color:var(--accent-ink);background:var(--accent-soft);border-radius:var(--r-pill);padding:3px 8px;
+  }
+  .hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid-53{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
+
+  /* плитки-показатели (верхний ряд концепта) */
+  .tile{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:16px 18px;box-shadow:var(--sh-sm);position:relative;overflow:hidden;
+  }
+  .tile__label{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+  .tile__value{font-family:var(--serif);font-size:22px;color:var(--ink);line-height:1.2}
+  .tile__meta{font-size:12px;color:var(--muted);margin-top:5px}
+  /* Астрологические знаки. В system-ui глифов ♈–♓ нет, и браузер уезжает
+     в Apple Color Emoji — знаки становятся цветными плашками мимо палитры.
+     Поэтому: явный символьный шрифт + текстовая презентация (VS15 в разметке). */
+  .tile__glyph,.prow__glyph{
+    font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans",serif;
+    font-variant-emoji:text;
+  }
+  .tile__glyph{
+    position:absolute;top:12px;right:14px;font-size:27px;line-height:1;
+    color:var(--gold);opacity:.85;
+  }
+
+  /* герой накшатры */
+  .hero{display:flex;gap:18px;align-items:flex-start}
+  .hero__no{
+    font-size:13px;font-weight:600;letter-spacing:.1em;color:var(--accent-ink);
+    background:var(--accent-soft);border-radius:var(--r-md);padding:9px 12px;flex:none;
+  }
+  .hero__name{font-family:var(--serif);font-weight:400;font-size:27px;color:var(--ink);margin:0 0 3px}
+  .hero__dev{font-size:12.5px;color:var(--muted)}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;margin-top:11px;
+    font-size:11.5px;font-weight:500;color:var(--gold-ink);
+    background:var(--gold-soft);border:1px solid var(--gold-line);border-radius:var(--r-pill);padding:4px 11px;
+  }
+  .badge svg{width:13px;height:13px}
+  .shakti{margin-top:13px;font-size:14.5px;color:var(--body)}
+  .shakti b{color:var(--ink);font-weight:600}
+  .metaline{
+    margin-top:15px;padding-top:13px;border-top:1px solid var(--line);
+    font-size:13px;color:var(--muted);
+  }
+  .metaline b{color:var(--ink);font-weight:600}
+
+  /* строки планет */
+  .prow{
+    display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:baseline;
+    padding:13px 0;border-top:1px solid var(--line);
+  }
+  .prow:first-of-type{border-top:0;padding-top:2px}
+  .prow__name{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;font-size:14.5px}
+  .prow__glyph{
+    width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:50%;
+    background:var(--gold-soft);color:var(--gold-ink);font-size:14px;
+  }
+  .prow__pos{font-size:12.5px;color:var(--muted);margin-top:3px;padding-left:35px}
+  .prow__desc{font-size:14px;color:var(--body)}
+  .dig{
+    display:inline-block;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    border-radius:var(--r-pill);padding:2px 8px;margin-left:5px;
+  }
+  .dig--ex{background:var(--good-soft);color:var(--good);border:1px solid var(--good-line)}
+  .dig--own{background:var(--neu-soft);color:var(--neu);border:1px solid var(--neu-line)}
+  .dig--deb{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad-line)}
+
+  /* таблица «ключ — значение» (панчанга, лунные данные) */
+  .kv{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-top:1px solid var(--line);font-size:14px}
+  .kv:first-of-type{border-top:0}
+  .kv__k{color:var(--muted);font-size:13.5px}
+  .kv__v{color:var(--ink);text-align:right}
+  .txt-good{color:var(--good)}
+  .txt-bad{color:var(--bad)}
+
+  /* вердикт дня */
+  .verdict{display:flex;gap:18px;align-items:flex-start}
+  .verdict__score{
+    width:62px;height:62px;flex:none;display:grid;place-items:center;border-radius:var(--r-lg);
+    font-family:var(--serif);font-size:30px;
+    background:var(--good-soft);color:var(--good);border:1px solid var(--good-line);
+  }
+  .verdict__text{font-size:16px;color:var(--ink)}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+    border-radius:var(--r-pill);padding:3px 10px;margin-left:8px;vertical-align:2px;
+  }
+  .chip--good{background:var(--good-soft);color:var(--good);border:1px solid var(--good-line)}
+
+  /* предупреждение и дисклеймер */
+  .warn{
+    display:flex;gap:12px;align-items:flex-start;margin-top:16px;
+    background:var(--bad-soft);border:1px solid var(--bad-line);border-radius:var(--r-md);
+    padding:14px 16px;font-size:13.5px;color:var(--body);
+  }
+  .warn svg{width:19px;height:19px;flex:none;color:var(--bad);margin-top:1px}
+  .warn b{color:var(--ink)}
+  .disc{
+    display:flex;gap:11px;align-items:flex-start;margin-top:26px;
+    font-size:12.5px;color:var(--muted);line-height:1.5;
+  }
+  .disc svg{width:16px;height:16px;flex:none;color:var(--muted);margin-top:2px}
+
+  /* мантра — сакральный акцент */
+  .mantra{
+    background:linear-gradient(160deg,var(--gold-soft),var(--surface) 70%);
+    border:1px solid var(--gold-line);text-align:center;
+  }
+  .mantra__dn{font-size:27px;color:var(--gold-ink);line-height:1.5;letter-spacing:.5px}
+  .mantra__ia{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--body);margin-top:4px}
+  .mantra__ru{font-size:12.5px;color:var(--muted);margin-top:7px}
+
+  /* степпер даты */
+  .dstep{display:inline-flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-pill);padding:4px}
+  .dstep button{
+    width:30px;height:30px;border:0;border-radius:50%;background:transparent;
+    color:var(--muted);font-size:17px;line-height:1;cursor:pointer;
+    transition:background var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+  }
+  .dstep button:hover{background:var(--surface-3);color:var(--ink)}
+  .dstep span{padding:0 10px;font-size:13.5px;color:var(--ink)}
+
+  /* карта домов */
+  .chart{width:100%;max-width:260px;height:auto;margin:0 auto;display:block}
+  .chart text{font-family:var(--sans)}
+
+  /* режим «Астролог» */
+  .pro{display:none}
+  body.is-pro .pro{display:block}
+  .prow.pro{display:none}
+  body.is-pro .prow.pro{display:grid}
+
+  /* ===================== АДАПТИВ ===================== */
+  @media (max-width:1100px){
+    .grid-4{grid-template-columns:1fr 1fr}
+    .grid-53{grid-template-columns:1fr}
+  }
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr}
+    .side{
+      position:fixed;inset:0 auto 0 0;width:var(--side-w);z-index:20;
+      transform:translateX(-100%);transition:transform var(--d-med) var(--e-out);box-shadow:var(--sh-lg);
+    }
+    body.is-menu .side{transform:none}
+    .scrim{
+      position:fixed;inset:0;z-index:19;background:rgba(20,22,38,.45);
+      opacity:0;pointer-events:none;transition:opacity var(--d-med) var(--e-out);
+    }
+    body.is-menu .scrim{opacity:1;pointer-events:auto}
+    .iconbtn.burger{display:grid}
+    .topbar{padding:14px 18px}
+    .content{padding:18px 18px 48px}
+    .seg--top{display:none}
+    .seg--side{display:flex}
+  }
+  @media (max-width:640px){
+    .grid-4,.grid-2{grid-template-columns:1fr}
+    .prow{grid-template-columns:1fr;gap:6px}
+    .prow__pos{padding-left:35px}
+    .hero{flex-direction:column;gap:12px}
+    .topbar__title{font-size:19px}
+    .verdict{gap:14px}
+    /* шапка на телефоне: одна строка на подпись, иначе дата рождения
+       разваливается на три строки и выдавливает заголовок */
+    .topbar{gap:10px}
+    .topbar__id{min-width:0}
+    .topbar__title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .topbar__sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .topbar__sub a{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<div class="scrim" hidden onclick="toggleMenu(false)"></div>
+
+<div class="app">
+
+  <!-- ==================== САЙДБАР ==================== -->
+  <aside class="side" id="side">
+    <div class="logo">
+      <svg class="logo__mark" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
+        <path d="M20 6c3.4 3.6 5 7.4 5 11.2 0 3.8-1.6 7.6-5 11.2-3.4-3.6-5-7.4-5-11.2C15 13.4 16.6 9.6 20 6z"/>
+        <path d="M20 28.4c-3.9 2.2-7.7 2.7-11.3 1.5 1-3.6 3.3-6.6 7.2-8.8M20 28.4c3.9 2.2 7.7 2.7 11.3 1.5-1-3.6-3.3-6.6-7.2-8.8"/>
+        <path d="M20 28.4c-4.4-.3-8-1.7-10.8-4.2M20 28.4c4.4-.3 8-1.7 10.8-4.2"/>
+        <path d="M8 32.5h24" stroke-linecap="round" opacity=".45"/>
+      </svg>
+      <div>
+        <div class="logo__name">Jyotish</div>
+        <div class="logo__sub">ведическая астрология</div>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="Разделы">
+      <button class="nav__item is-on" data-tab="me" onclick="setTab('me')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0114.4 0"/></svg>
+        Обо мне
+      </button>
+      <button class="nav__item" data-tab="today" onclick="setTab('today')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" stroke-linecap="round"/></svg>
+        Сегодня
+      </button>
+      <button class="nav__item" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke-linecap="round"/></svg>
+        Подобрать дату <span class="nav__soon">скоро</span>
+      </button>
+      <button class="nav__item" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 20s-7.2-4.3-7.2-9.2A4.3 4.3 0 0112 8.6a4.3 4.3 0 017.2 2.2C19.2 15.7 12 20 12 20z"/></svg>
+        Совместимость <span class="nav__soon">скоро</span>
+      </button>
+      <button class="nav__item" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3.5c2.4 2.6 3.6 5.2 3.6 7.9S14.4 16.7 12 19.3c-2.4-2.6-3.6-5.2-3.6-7.9S9.6 6.1 12 3.5z"/><path d="M5 20.5h14" stroke-linecap="round"/></svg>
+        Практики <span class="nav__soon">скоро</span>
+      </button>
+      <button class="nav__item" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4.5 5.5A2 2 0 016.5 3.5H19v17H6.5a2 2 0 01-2-2z"/><path d="M4.5 16.5h14.5" /></svg>
+        Справочник <span class="nav__soon">скоро</span>
+      </button>
+      <button class="nav__item" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1v.3a2 2 0 11-4 0v-.2a1.6 1.6 0 00-2.7-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3.5a2 2 0 110-4h.2a1.6 1.6 0 001.1-2.7l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-1.1V3.5a2 2 0 114 0v.2a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 001.1 2.7h.3a2 2 0 110 4h-.2a1.6 1.6 0 00-1.4 1z"/></svg>
+        Настройки <span class="nav__soon">скоро</span>
+      </button>
+    </nav>
+
+    <!-- на узких экранах переключатель режима переезжает сюда из шапки -->
+    <div class="seg seg--side" role="group" aria-label="Режим отображения">
+      <button data-aud="simple" class="is-on" onclick="setAud(false)" aria-pressed="true">Пользователь</button>
+      <button data-aud="pro" onclick="setAud(true)" aria-pressed="false">Астролог</button>
+    </div>
+
+    <div class="side__spacer"></div>
+
+    <div class="promo">
+      <div class="promo__head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 18h16M4 18l-1.5-9 5 3.5L12 5l4.5 7.5 5-3.5L20 18z"/></svg>
+        Премиум доступ
+      </div>
+      <p class="promo__text">Расширенные отчёты, сохранённые карты и полный справочник накшатр.</p>
+      <button class="btn" onclick="return false">Узнать больше</button>
+    </div>
+
+    <div class="help">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 13v-1a8 8 0 1116 0v1M4 13v3a2 2 0 002 2h1v-5H6a2 2 0 00-2 2zM20 13v3a2 2 0 01-2 2h-1v-5h1a2 2 0 012 2z"/></svg>
+      <div><b>Нужна помощь?</b><a href="#" onclick="return false">Напишите нам</a></div>
+    </div>
+  </aside>
+
+  <!-- ==================== КОНТЕНТ ==================== -->
+  <div class="main">
+
+    <header class="topbar">
+      <button class="iconbtn burger" aria-label="Меню" onclick="toggleMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>
+      </button>
+      <div class="topbar__id">
+        <h1 class="topbar__title" id="page-title">Добро пожаловать, Мария</h1>
+        <div class="topbar__sub">24 мая 1990, 14:30 · Москва<a href="#" onclick="return false">изменить данные</a></div>
+      </div>
+      <div class="topbar__spacer"></div>
+
+      <div class="seg seg--top" role="group" aria-label="Режим отображения">
+        <button data-aud="simple" class="is-on" onclick="setAud(false)" aria-pressed="true">Пользователь</button>
+        <button data-aud="pro" onclick="setAud(true)" aria-pressed="false">Астролог</button>
+      </div>
+
+      <button class="iconbtn" id="themebtn" aria-label="Сменить тему" onclick="toggleTheme()">
+        <svg id="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+        <svg id="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke-linecap="round"/></svg>
+      </button>
+      <div class="avatar" aria-hidden="true">М</div>
+    </header>
+
+    <div class="content">
+
+      <!-- ==================== ОБО МНЕ ==================== -->
+      <section class="panel is-on" id="panel-me" aria-label="Обо мне">
+
+        <div class="grid-4">
+          <div class="tile">
+            <div class="tile__label">Восходящий знак</div>
+            <div class="tile__value">Дева</div>
+            <div class="tile__meta">лагна</div>
+            <div class="tile__glyph" aria-hidden="true">♍︎</div>
+          </div>
+          <div class="tile">
+            <div class="tile__label">Лунный знак</div>
+            <div class="tile__value">Телец</div>
+            <div class="tile__meta">Луна в экзальтации</div>
+            <div class="tile__glyph" aria-hidden="true">♉︎</div>
+          </div>
+          <div class="tile">
+            <div class="tile__label">Накшатра Луны</div>
+            <div class="tile__value">Рохини</div>
+            <div class="tile__meta">2-я пада</div>
+            <div class="tile__glyph" aria-hidden="true">☾︎</div>
+          </div>
+          <div class="tile">
+            <div class="tile__label">Текущая маха-даша</div>
+            <div class="tile__value">Венера</div>
+            <div class="tile__meta">2019 – 2039</div>
+            <div class="tile__glyph" aria-hidden="true">♀︎</div>
+          </div>
+        </div>
+
+        <div class="sechead">Ваша накшатра</div>
+        <div class="grid-53">
+          <div class="card">
+            <div class="hero">
+              <div class="hero__no">04</div>
+              <div>
+                <h2 class="hero__name">Рохини</h2>
+                <div class="hero__dev">Rohiṇī · «Повозка/колесница, растущий побег» · Телец 10°00′–23°20′</div>
+                <span class="badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+                  управитель Луна
+                </span>
+                <p class="shakti"><b>Шакти:</b> сила роста и восхождения — взращивать, воплощать, доводить до материального цветения.</p>
+                <div class="metaline">Лагна: <b>Дева</b> · Луна в Рохини, пада <b>2</b> · Гана: Манушья · Цель: Мокша</div>
+                <div style="margin-top:13px"><a href="#" onclick="return false">Открыть полную статью Рохини →</a></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mantra">
+            <div class="card__head"><h3 class="card__title" style="margin:0 auto">Ваша мантра и упайя</h3></div>
+            <div class="mantra__dn">ॐ प्रजापतये नमः</div>
+            <div class="mantra__ia">oṃ prajāpataye namaḥ</div>
+            <div class="mantra__ru">Ом Праджапатае намаха — мантра божества Рохини</div>
+          </div>
+        </div>
+
+        <div class="sechead">Планеты по домам и знакам</div>
+        <div class="card">
+          <div class="prow">
+            <div>
+              <div class="prow__name"><span class="prow__glyph" aria-hidden="true">☉︎</span>Солнце</div>
+              <div class="prow__pos">9-й дом · Телец</div>
+            </div>
+            <div class="prow__desc">Удача через знание и дхарму; отец и учитель значимы. Достоинство и вера как опора.</div>
+          </div>
+          <div class="prow">
+            <div>
+              <div class="prow__name"><span class="prow__glyph" aria-hidden="true">☾︎</span>Луна</div>
+              <div class="prow__pos">1-й дом · Телец <span class="dig dig--ex">экзальтация</span></div>
+            </div>
+            <div class="prow__desc">Луна в своём цветении: устойчивый ум, обаяние, тяга к красоте и комфорту.</div>
+          </div>
+          <div class="prow">
+            <div>
+              <div class="prow__name"><span class="prow__glyph" aria-hidden="true">♂︎</span>Марс</div>
+              <div class="prow__pos">6-й дом · Водолей</div>
+            </div>
+            <div class="prow__desc">Энергия в преодолении препятствий и соперников; дисциплина через труд.</div>
+          </div>
+          <div class="prow pro">
+            <div>
+              <div class="prow__name"><span class="prow__glyph" aria-hidden="true">☿︎</span>Меркурий</div>
+              <div class="prow__pos">10-й дом · Близнецы <span class="dig dig--own">свой знак</span></div>
+            </div>
+            <div class="prow__desc">Сильный ум в карьере: речь, расчёт, коммуникация как инструмент статуса.</div>
+          </div>
+          <div class="prow pro">
+            <div>
+              <div class="prow__name"><span class="prow__glyph" aria-hidden="true">♄︎</span>Сатурн</div>
+              <div class="prow__pos">5-й дом · Овен <span class="dig dig--deb">падение</span></div>
+            </div>
+            <div class="prow__desc">Ответственность в творчестве и с детьми; ранняя серьёзность, зрелость через терпение.</div>
+          </div>
+          <p class="hint pro" style="margin:14px 0 0">Показаны все 9 планет с достоинствами (экзальтация / свой знак / падение). Ретро-статус появится, когда API начнёт его отдавать.</p>
+          <p class="hint" id="me-more-hint" style="margin:14px 0 0">Ещё 6 планет, карта домов и периоды-даши — в режиме «Астролог».</p>
+        </div>
+
+        <div class="pro">
+          <div class="sechead">Карта домов <span class="flag">Астролог</span></div>
+          <div class="grid-2">
+            <div class="card">
+              <svg class="chart" viewBox="0 0 220 220" role="img" aria-label="Карта домов, северный стиль: лагна в Деве">
+                <rect x="4" y="4" width="212" height="212" rx="4" fill="none" stroke="var(--line-2)" stroke-width="1.4"/>
+                <line x1="4" y1="4" x2="216" y2="216" stroke="var(--line-2)"/>
+                <line x1="216" y1="4" x2="4" y2="216" stroke="var(--line-2)"/>
+                <polygon points="110,4 216,110 110,216 4,110" fill="none" stroke="var(--line-2)"/>
+                <text x="110" y="32" text-anchor="middle" font-size="12" font-weight="600" fill="var(--accent)">Лагна</text>
+                <text x="110" y="46" text-anchor="middle" font-size="11" fill="var(--muted)">1 · Дева</text>
+                <text x="55" y="114" text-anchor="middle" font-size="11" fill="var(--muted)">10</text>
+                <text x="165" y="114" text-anchor="middle" font-size="11" fill="var(--muted)">4</text>
+                <text x="110" y="196" text-anchor="middle" font-size="11" fill="var(--muted)">7</text>
+              </svg>
+              <p class="hint" style="text-align:center;margin:12px 0 0">Северный / южный стиль · планеты по домам</p>
+            </div>
+            <div class="card">
+              <div class="card__head"><h3 class="card__title">Виншоттари-даша</h3></div>
+              <p style="margin:0;font-size:14px">Текущий период: <b style="color:var(--ink)">Венера — Меркурий</b><br>до 03.2028 · тема отношений, красоты и обучения.</p>
+              <div class="prow" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+                <div>
+                  <div class="prow__name"><span class="prow__glyph" aria-hidden="true">♀︎</span>Махадаша</div>
+                  <div class="prow__pos">Венера · 20 лет</div>
+                </div>
+                <div class="prow__desc">2019–2039</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="disc">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01" stroke-linecap="round"/></svg>
+          Точную форму мантры и число повторений сверяйте с учителем. Описания характера и здоровья — рабочая версия по классике, не диагноз.
+        </p>
+      </section>
+
+      <!-- ==================== СЕГОДНЯ ==================== -->
+      <section class="panel" id="panel-today" aria-label="Сегодня">
+
+        <div class="dstep" style="margin-bottom:20px">
+          <button aria-label="Предыдущий день" onclick="return false">‹</button>
+          <span>24 июля 2026, пятница</span>
+          <button aria-label="Следующий день" onclick="return false">›</button>
+        </div>
+
+        <div class="grid-53">
+          <div class="card">
+            <div class="card__head"><h2 class="card__title">Ваша благоприятность дня</h2></div>
+            <div class="verdict">
+              <div class="verdict__score">4</div>
+              <div>
+                <div class="verdict__text">Тара <b>Кшема</b> — благоприятная <span class="chip chip--good">✓ хороший день</span></div>
+                <p style="margin:7px 0 0;font-size:14px">Хорошее время для важного и нового: начинания укоренятся.</p>
+                <p class="hint pro" style="margin:8px 0 0">Позиция 4 от Джанмы · группа 1 (Джанмаркша) · управитель дня — Луна</p>
+              </div>
+            </div>
+            <div class="warn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01" stroke-linecap="round"/></svg>
+              <div>Активна йога <b>Вьятипата</b> — один из дней, которые в традиции обходят для важных начинаний. Даже при хорошей накшатре это стоит учесть.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head">
+              <h2 class="card__title">Панчанга дня</h2>
+              <span class="hint" style="margin-left:auto">пять элементов</span>
+            </div>
+            <div class="kv"><span class="kv__k">Титхи</span><span class="kv__v txt-good">Панчами (5) · растущая</span></div>
+            <div class="kv"><span class="kv__k">Вара</span><span class="kv__v">Пятница · Венера</span></div>
+            <div class="kv"><span class="kv__k">Накшатра</span><span class="kv__v">Пунарвасу</span></div>
+            <div class="kv"><span class="kv__k">Йога</span><span class="kv__v txt-bad">Вьятипата (17) · осторожность</span></div>
+            <div class="kv"><span class="kv__k">Карана</span><span class="kv__v">Бава</span></div>
+          </div>
+        </div>
+
+        <div class="pro">
+          <div class="sechead">30 мухурт дня <span class="flag">Астролог</span></div>
+          <div class="card">
+            <p style="margin:0;font-size:14px">Абхиджит-мухурта (полдень) · <b style="color:var(--ink)">11:48–12:36</b> — самый благоприятный отрезок. Полная сетка 15 дневных + 15 ночных мухурт и наватара-чакра доступны в проф-режиме.</p>
+          </div>
+        </div>
+
+        <div class="sechead">Мантра дня</div>
+        <div class="card mantra">
+          <div class="mantra__dn">ॐ शुक्राय नमः</div>
+          <div class="mantra__ia">oṃ śukrāya namaḥ</div>
+          <div class="mantra__ru">по управителю дня — Венера (Шукра)</div>
+        </div>
+
+        <p class="disc">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01" stroke-linecap="round"/></svg>
+          «День осторожности» — мягкая рекомендация, а не запрет: сила таких дней в дальних кругах ослабевает. Ориентир по методу школы, точный расчёт делает астролог.
+        </p>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ---------- тема ---------- */
+  function applyTheme(t){
+    document.documentElement.setAttribute('data-theme',t);
+    document.getElementById('ic-moon').style.display = t==='light'?'block':'none';
+    document.getElementById('ic-sun').style.display  = t==='light'?'none':'block';
+  }
+  function toggleTheme(){
+    applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');
+  }
+  applyTheme(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+
+  /* ---------- аудитория ---------- */
+  var TITLES={me:{simple:'Добро пожаловать, Мария',pro:'Карта рождения — Мария'},today:{simple:'Сегодня',pro:'Панчанга дня'}};
+  var curTab='me', isPro=false;
+
+  function setAud(pro){
+    isPro=pro;
+    document.body.classList.toggle('is-pro',pro);
+    /* переключателей два — в шапке и в мобильном меню, держим их в одном состоянии */
+    document.querySelectorAll('[data-aud]').forEach(function(b){
+      var on = (b.dataset.aud==='pro')===pro;
+      b.classList.toggle('is-on',on);
+      b.setAttribute('aria-pressed',String(on));
+    });
+    document.getElementById('me-more-hint').style.display = pro?'none':'block';
+    syncTitle();
+  }
+
+  /* ---------- разделы ---------- */
+  function setTab(t){
+    curTab=t;
+    document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('is-on')});
+    document.getElementById('panel-'+t).classList.add('is-on');
+    document.querySelectorAll('.nav__item[data-tab]').forEach(function(b){
+      b.classList.toggle('is-on',b.dataset.tab===t);
+    });
+    syncTitle();
+    toggleMenu(false);
+    scrollTo(0,0); /* не scrollIntoView: он ставит контент под липкую шапку */
+  }
+  function syncTitle(){
+    document.getElementById('page-title').textContent = TITLES[curTab][isPro?'pro':'simple'];
+  }
+
+  /* ---------- мобильное меню ---------- */
+  function toggleMenu(force){
+    var open = force===undefined ? !document.body.classList.contains('is-menu') : force;
+    document.body.classList.toggle('is-menu',open);
+    document.querySelector('.scrim').hidden = !open;
+  }
+  addEventListener('keydown',function(e){ if(e.key==='Escape') toggleMenu(false); });
+</script>
+</body>
+</html>
