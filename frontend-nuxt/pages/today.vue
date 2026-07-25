@@ -2,7 +2,8 @@
 // Страница «Сегодня» — панчанга выбранной даты на реальных данных.
 //
 // Источники данных:
-//   POST /api/panchang  → dt_sunrise, dt_sunset, horas[], muhurtas[] + tithis[]
+//   POST /api/panchang  → dt_sunrise, dt_sunset, horas[], muhurtas[]
+//                         + tithis[], yogas[], karanas[]
 //   POST /api/calendar  → транзиты Луны по накшатрам (накшатра дня)
 //   content/panchanga.json (vara / yoga / karana / stop_factors) — описания
 //   content/tithi.json (15 титх × категории) — описания
@@ -11,10 +12,20 @@
 //
 // ЧЕГО ЗДЕСЬ НЕТ И БЫТЬ НЕ ДОЛЖНО: «энергии дня», персональных оценок «8/10»,
 // рейтинга по сферам — таких моделей у сервиса нет, рисовать их = врать.
-// Йога и карана API не отдаёт — карточки помечены «не рассчитывается»,
-// значения не выдумываем (docs/HANDOFF.md §5.1: панчангу нельзя разрывать,
-// но и подменять недостающее вымыслом нельзя).
-import { loadPanchanga, loadTithi, splitTithi, useJyotish } from '~/composables/useJyotish'
+// Йогу и карану бэкенд теперь считает (задача 2.12), поэтому панчанга здесь
+// полная — все пять элементов, плюс стоп-фактор Бхадра из караны Вишти
+// (docs/HANDOFF.md §5.1: панчангу нельзя разрывать). Если ответ приходит без
+// этих полей — карточки честно возвращаются к пометке «не рассчитывается».
+//
+// Проф-глубина (задача 2.9): 30 мухурт суток — отдельным блоком под режимом
+// «Астролог». Времена приходят тем же ответом /api/panchang, описания —
+// из content/muhurta30.json (55 КБ, отдельный чанк, грузится только когда
+// проф-режим реально включён).
+import {
+  loadPanchanga, loadTithi, splitTithi, useJyotish,
+  dayMuhurtas, muhurtaTexts,
+} from '~/composables/useJyotish'
+import type { DayMuhurta } from '~/composables/useJyotish'
 import { dayKalams, isKalamActive, type KalamKey, type KalamPeriod } from '~/utils/kalam'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
@@ -46,7 +57,34 @@ interface ApiDay {
   muhurtas: Array<{ num: number; name: string; quality: string; day_night: string; dt_start: string; dt_end: string }>
   horas: ApiHora[]
 }
-interface ApiPanchang { tithis: ApiTithi[]; days: ApiDay[] }
+/** Нитья-йога: 27 сочетаний по сумме долгот Солнца и Луны. */
+interface ApiYoga {
+  num: number          // 1..27
+  name: string
+  quality: string
+  is_stop: boolean     // Вьятипата / Вайдхрити — избегаются целиком
+  dt_start: string
+  dt_end: string
+}
+/** Карана: половина титхи, 11 видов. */
+interface ApiKarana {
+  num: number
+  name: string         // «Вишти (Бхадра)»
+  type: string         // Чара / Стхира
+  type_label: string
+  quality: string
+  is_bhadra: boolean   // стоп-фактор Бхадра
+  dt_start: string
+  dt_end: string
+}
+/** yogas / karanas появились в ответе позже остальных полей — поэтому
+ * необязательные: со старым бэкендом страница обязана работать как раньше. */
+interface ApiPanchang {
+  tithis: ApiTithi[]
+  days: ApiDay[]
+  yogas?: ApiYoga[]
+  karanas?: ApiKarana[]
+}
 interface ApiNakTransit {
   nk_num: number       // 1..27
   name: string
@@ -145,6 +183,10 @@ const loadedAt = ref<Date | null>(null)
 const panContent = ref<any | null>(null)
 const tithiContent = ref<any | null>(null)
 
+// Дисклеймеры достоверности и вводные абзацы — тоже из content/ (задача 2.8).
+const { disclaimer } = useDisclaimers()
+const { t } = useUiTexts()
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -233,6 +275,51 @@ const tithiList = computed<string[]>(() => {
   return raw.split(/,\s*/).map((s) => s.trim()).filter(Boolean).slice(0, 4)
 })
 
+// ─── Йога и карана ──────────────────────────────────────────────────────────
+// Раньше их не было в расчётном ядре и обе карточки стояли с пометкой
+// «не рассчитывается». Теперь /api/panchang отдаёт yogas и karanas — берём их
+// тем же правилом «что действует на восходе», что титхи и накшатру.
+// Если поля в ответе нет (старый бэкенд), всё возвращается к прежней пометке.
+
+const yogaNow = computed(() => {
+  const list = panchang.value?.yogas
+  return list?.length ? activeAtSunrise(list) : null
+})
+const karanaNow = computed(() => {
+  const list = panchang.value?.karanas
+  return list?.length ? activeAtSunrise(list) : null
+})
+
+/** Описание йоги из content/panchanga.json. Сверяем имя: если номер и имя
+ * разошлись, доверяем имени — иначе показали бы чужую трактовку. */
+const yogaDef = computed(() => {
+  const y = yogaNow.value
+  const list = panContent.value?.yoga?.list as any[] | undefined
+  if (!y || !list) return null
+  const byNo = list[y.num - 1]
+  if (byNo?.name === y.name) return byNo
+  return list.find((x) => x.name === y.name) ?? null
+})
+
+/** Описание караны: 7 подвижных + 4 неподвижных, ищем по имени. */
+const karanaDef = computed(() => {
+  const k = karanaNow.value
+  const c = panContent.value?.karana
+  if (!k || !c) return null
+  const all = [...(c.movable ?? []), ...(c.fixed ?? [])] as any[]
+  return all.find((x) => x.name === k.name) ?? null
+})
+
+/** Бхадра (Вишти-карана) в выбранных сутках — доменный стоп-фактор.
+ * Берём все интервалы дня, а не только тот, что на восходе: Бхадра может
+ * начаться днём, и молчать об этом нельзя (HANDOFF §5.1). */
+const bhadraPeriods = computed(() => {
+  const list = panchang.value?.karanas ?? []
+  const from = day.value
+  const to = addDays(day.value, 1)
+  return list.filter((k) => k.is_bhadra && at(k.dt_end) > from && at(k.dt_start) < to)
+})
+
 const varaDef = computed(() => panContent.value?.vara?.days?.[day.value.getDay()] ?? null)
 const varaPlanet = computed(() => (varaDef.value?.planet as string | undefined)?.split(' (')[0] ?? '')
 
@@ -255,6 +342,11 @@ const TARA_STRENGTH_RU: Record<string, string> = {
   full: 'в полную силу (1-я группа, Джанмаркша)',
   partial: 'ослаблена (2-я группа, Кармаркша)',
   mild: 'почти нейтральна (3-я группа, Адханаркша)',
+}
+/** Пояснение к группе — из content/ui_texts.json (tara_groups.group_1…3):
+ * группы там описаны ровно теми же словами, что и наши strength. */
+const TARA_GROUP_KEY: Record<string, string> = {
+  full: 'tara_groups.group_1', partial: 'tara_groups.group_2', mild: 'tara_groups.group_3',
 }
 
 // ─── Стоп-факторы дня ───────────────────────────────────────────────────────
@@ -297,6 +389,37 @@ const kalamItems = computed(() => {
 const activeKalam = computed(() =>
   isToday.value ? kalams.value.find((k) => isKalamActive(k, now.value)) ?? null : null)
 
+/** Бхадра встаёт в тот же список стоп-факторов, что и каламы: разрывать
+ * панчангу на «хорошее отдельно, плохое отдельно» нельзя. */
+const bhadraItems = computed(() => {
+  const combos = (panContent.value?.stop_factors?.combos ?? []) as any[]
+  const def = combos.find((c) => String(c.name).startsWith('Бхадра'))
+  return bhadraPeriods.value.map((k) => {
+    const start = at(k.dt_start)
+    const end = at(k.dt_end)
+    const active = isToday.value && now.value >= start && now.value < end
+    // Карану, начавшуюся накануне, API обрезает по границе запроса (00:00) —
+    // писать «с 00:00» было бы неправдой, поэтому у обрезанной показываем
+    // только конец.
+    const clipped = start.getTime() <= day.value.getTime()
+    return {
+      name: active ? 'Бхадра (Вишти-карана) · идёт сейчас' : 'Бхадра (Вишти-карана)',
+      time: clipped ? `до ${fmtTime(end)}` : `${fmtTime(start)} – ${fmtTime(end)}`,
+      note: def?.note || 'Избегают для благих дел.',
+      icon: 'alert' as const,
+      tone: 'bad' as const,
+    }
+  })
+})
+
+const stopItems = computed(() => [...kalamItems.value, ...bhadraItems.value])
+
+const activeBhadra = computed(() => {
+  if (!isToday.value) return null
+  return bhadraPeriods.value.find(
+    (k) => now.value >= at(k.dt_start) && now.value < at(k.dt_end)) ?? null
+})
+
 // ─── Хоры (лента «Ваш день по часам») ───────────────────────────────────────
 // Только факт: чья хора и с какого по какое время. Никаких оценок
 // «благоприятно / неблагоприятно» — модели для них нет.
@@ -311,6 +434,48 @@ const dayHoras = computed(() => {
     current: isToday.value
       && now.value >= at(h.dt_start) && now.value < at(h.dt_end),
   }))
+})
+
+// ─── 30 мухурт суток (проф-режим) ───────────────────────────────────────────
+// Деление на 15 дневных + 15 ночных делает бэкенд (Panchangam.calc_muhurtas_day)
+// и отдаёт готовыми отрезками — здесь только сшивка с описаниями по номеру
+// мухурты. Своей арифметики над временами нет: пересчитывать то, что уже
+// посчитано по восходу и закату, значило бы завести второй источник правды.
+
+const { isPro } = useAudience()
+
+const muhurtas = ref<DayMuhurta[]>([])
+const muhLoading = ref(false)
+const muhFailed = ref(false)
+const muhTexts = ref<{ intro: string; timeNote: string; src: string } | null>(null)
+
+async function loadMuhurtas() {
+  const list = dayInfo.value?.muhurtas
+  if (!list?.length) { muhurtas.value = []; return }
+  muhLoading.value = true
+  muhFailed.value = false
+  try {
+    const [rows, texts] = await Promise.all([dayMuhurtas(list), muhurtaTexts()])
+    muhurtas.value = rows
+    muhTexts.value = texts
+  } catch {
+    muhFailed.value = true
+    muhurtas.value = []
+  } finally {
+    muhLoading.value = false
+  }
+}
+
+// Блок всегда есть в разметке (его прячет CSS), поэтому 55 КБ запрашиваем
+// только когда режим «Астролог» включён — и заново при смене даты.
+watch([isPro, dayInfo], ([pro, d]) => {
+  if (pro && d) loadMuhurtas()
+}, { immediate: true })
+
+/** Мухурта, идущая прямо сейчас, — только для сегодняшних суток. */
+const currentMuhurta = computed(() => {
+  if (!isToday.value) return null
+  return muhurtas.value.find((m) => now.value >= m.start && now.value < m.end) ?? null
 })
 
 // ─── «Астрологическая причина дня» — только проверяемые факты ───────────────
@@ -347,6 +512,22 @@ const reasons = computed(() => {
         + ` это тара «${ta.name}»: ${ta.short}. Это один из показателей дня, а не приговор.`,
     })
   }
+  const y = yogaNow.value
+  if (y) {
+    out.push({
+      tone: y.is_stop ? 'warn' : qualityVariant(y.quality) === 'bad' ? 'warn' : 'info',
+      text: `Нитья-йога на восходе — ${y.name} (${y.num} из 27), ${y.quality.toLowerCase()}.`
+        + (y.is_stop ? ' Эту йогу традиция избегает целиком для благих начинаний.' : ''),
+    })
+  }
+  const k = karanaNow.value
+  if (k) {
+    out.push({
+      tone: k.is_bhadra ? 'warn' : 'info',
+      text: `Карана на восходе — ${k.name}, ${(k.type_label || k.type).toLowerCase()}.`
+        + (k.is_bhadra ? ' Это Бхадра: время, которого традиция избегает для благих дел.' : ''),
+    })
+  }
   const ak = activeKalam.value
   if (ak) {
     out.push({
@@ -355,11 +536,21 @@ const reasons = computed(() => {
         + ' традиция советует не начинать в этот отрезок важных дел.',
     })
   }
-  out.push({
-    tone: 'info',
-    text: 'Йога и карана в расчёт не входят: сервис их пока не считает,'
-      + ' поэтому картина дня по панчанге здесь неполная.',
-  })
+  const ab = activeBhadra.value
+  if (ab) {
+    out.push({
+      tone: 'warn',
+      text: `Прямо сейчас идёт Бхадра (${untilLabel(ab.dt_end, day.value)}) —`
+        + ' карана Вишти, один из главных стоп-факторов панчанги.',
+    })
+  }
+  if (!y || !k) {
+    out.push({
+      tone: 'info',
+      text: 'Часть элементов панчанги этот расчёт не вернул, поэтому картина дня'
+        + ' здесь неполная — её оценивают всеми пятью элементами сразу.',
+    })
+  }
   return out
 })
 
@@ -413,25 +604,53 @@ const cards = computed(() => {
     highlight: true,
   })
 
-  list.push({
-    no: 4,
-    label: 'Йога',
-    glyph: '❖',
-    value: NOT_CALCULATED,
-    text: 'Нитья-йогу (27 сочетаний суммы долгот Солнца и Луны) сервис пока'
-      + ' не считает — значение не показываем, чтобы не выдумывать.',
-    muted: true,
-  })
+  const y = yogaNow.value
+  list.push(y
+    ? {
+        no: 4,
+        label: 'Йога',
+        glyph: '❖',
+        value: y.name,
+        until: untilLabel(y.dt_end, base),
+        chip: y.quality,
+        chipVariant: qualityVariant(y.quality),
+        text: yogaDef.value?.mean
+          ? `Нитья-йога ${y.num} из 27. ${yogaDef.value.mean}`
+          : `Нитья-йога ${y.num} из 27 — сочетание по сумме долгот Солнца и Луны.`,
+      }
+    : {
+        no: 4,
+        label: 'Йога',
+        glyph: '❖',
+        value: NOT_CALCULATED,
+        text: 'Нитья-йогу (27 сочетаний суммы долгот Солнца и Луны) этот расчёт'
+          + ' не вернул — значение не показываем, чтобы не выдумывать.',
+        muted: true,
+      })
 
-  list.push({
-    no: 5,
-    label: 'Карана',
-    glyph: '☽︎',
-    value: NOT_CALCULATED,
-    text: 'Карану (половину титхи, 11 видов) сервис пока не считает. Из-за этого'
-      + ' не виден и стоп-фактор Бхадра (Вишти-карана).',
-    muted: true,
-  })
+  const k = karanaNow.value
+  list.push(k
+    ? {
+        no: 5,
+        label: 'Карана',
+        glyph: '☽︎',
+        value: k.name,
+        until: untilLabel(k.dt_end, base),
+        chip: k.type_label || k.type,
+        chipVariant: k.is_bhadra ? ('bad' as const) : qualityVariant(k.quality),
+        text: karanaDef.value?.good
+          ? `Половина титхи. ${karanaDef.value.good}`
+          : `Половина титхи, ${k.type_label || k.type}.`,
+      }
+    : {
+        no: 5,
+        label: 'Карана',
+        glyph: '☽︎',
+        value: NOT_CALCULATED,
+        text: 'Карану (половину титхи, 11 видов) этот расчёт не вернул. Из-за этого'
+          + ' не виден и стоп-фактор Бхадра (Вишти-карана).',
+        muted: true,
+      })
 
   return list
 })
@@ -496,32 +715,48 @@ const updatedLabel = computed(() =>
             k="Накшатра"
             :v="nakNow ? `${nakNow.ru} (${nakNow.nk_num}) · ${nakNow.lord}` : '—'"
           />
-          <UiKv k="Йога">
-            <span class="today-na">{{ NOT_CALCULATED }}</span>
+          <UiKv k="Йога" :tone="yogaNow?.is_stop ? 'bad' : undefined">
+            <template v-if="yogaNow">
+              {{ yogaNow.name }} ({{ yogaNow.num }}) · {{ yogaNow.quality.toLowerCase() }}
+            </template>
+            <span v-else class="today-na">{{ NOT_CALCULATED }}</span>
           </UiKv>
-          <UiKv k="Карана">
-            <span class="today-na">{{ NOT_CALCULATED }}</span>
+          <UiKv k="Карана" :tone="karanaNow?.is_bhadra ? 'bad' : undefined">
+            <template v-if="karanaNow">
+              {{ karanaNow.name }} · {{ (karanaNow.type_label || karanaNow.type).toLowerCase() }}
+            </template>
+            <span v-else class="today-na">{{ NOT_CALCULATED }}</span>
           </UiKv>
           <UiKv
             k="Восход · закат"
             :v="sunrise && sunset ? `${fmtTime(sunrise)} · ${fmtTime(sunset)}` : '—'"
           />
 
-          <UiDisclaimer>
-            Панчангу оценивают целиком, пятью элементами сразу. Йогу и карану
-            сервис пока не считает — учитывайте, что картина дня здесь неполная.
+          <UiDisclaimer v-if="yogaNow && karanaNow">
+            Панчангу оценивают целиком, пятью элементами сразу: ни один из них —
+            даже благоприятная накшатра — не читается в отрыве от остальных
+            и от стоп-факторов дня.
+          </UiDisclaimer>
+          <UiDisclaimer v-else>
+            Панчангу оценивают целиком, пятью элементами сразу. Часть элементов
+            этот расчёт не вернул — учитывайте, что картина дня здесь неполная.
           </UiDisclaimer>
         </UiCard>
 
         <UiCard title="Важно знать сегодня" subtitle="ежедневные стоп-факторы">
-          <UiWarnList :items="kalamItems" />
+          <UiWarnList :items="stopItems" />
+          <p v-if="bhadraItems.length" class="hint" style="margin:12px 0 0">
+            Бхадра (Вишти-карана) — не расчёт времени по дню недели, а реальный
+            отрезок караны из панчанги этих суток.
+          </p>
           <UiDisclaimer>
-            Время считаем распространённым методом: светлое время суток
+            Время каламов считаем распространённым методом: светлое время суток
             (восход {{ sunrise ? fmtTime(sunrise) : '—' }} — закат
             {{ sunset ? fmtTime(sunset) : '—' }}) делится на 8 равных частей,
             номер части задаёт день недели. Школы расходятся в точке отсчёта
             восхода и в схеме для Гулики — это ориентир, а не запрет.
           </UiDisclaimer>
+          <UiMethodNote id="А4" />
         </UiCard>
       </div>
 
@@ -544,8 +779,13 @@ const updatedLabel = computed(() =>
           :class="{ 'today-card--na': item.muted }"
         />
       </div>
+      <!-- Пояснение к нумерации титх — из content/ui_texts.json. -->
+      <p v-if="t('tithi_30_note')" class="hint" style="margin:12px 0 0">
+        {{ t('tithi_30_note') }}
+      </p>
 
       <UiSectionHead title="Тара-бала для вас" />
+      <p v-if="t('tara_lead')" class="today-msg">{{ t('tara_lead') }}</p>
       <UiCard v-if="!hasProfile">
         <p class="today-msg">
           Тара-бала считается от вашей джанма-накшатры — накшатры Луны в момент
@@ -588,6 +828,11 @@ const updatedLabel = computed(() =>
               {{ TARA_STRENGTH_RU[tara.strength] }}
             </p>
             <p class="tara__full">{{ tara.full }}</p>
+            <UiProOnly v-if="t(TARA_GROUP_KEY[tara.strength])">
+              <p class="hint" style="margin:10px 0 0">
+                {{ t(TARA_GROUP_KEY[tara.strength]) }}
+              </p>
+            </UiProOnly>
             <p v-if="taraSchoolGood" class="tara__extra">
               <b>По школе подходит:</b> {{ taraSchoolGood }}
             </p>
@@ -628,6 +873,48 @@ const updatedLabel = computed(() =>
         </UiCard>
       </template>
 
+      <!-- ─── 30 мухурт (проф-глубина) ─────────────────────────────────── -->
+      <UiProOnly>
+        <UiSectionHead flag="Астролог">
+          30 мухурт суток
+          <UiMethodNote id="А10" />
+          <UiMethodNote id="А11" />
+        </UiSectionHead>
+        <UiCard
+          title="Мухурты"
+          :note="currentMuhurta ? `сейчас — ${currentMuhurta.name}` : 'от восхода до восхода'"
+          :heading-level="3"
+        >
+          <p v-if="muhTexts" class="today-msg">{{ muhTexts.intro }}</p>
+
+          <ProMuhurta30
+            v-if="muhurtas.length"
+            :items="muhurtas"
+            :now="isToday ? now : null"
+          />
+          <p v-else class="today-msg" style="margin:0">
+            <template v-if="muhLoading">Загружаем описания мухурт…</template>
+            <template v-else-if="muhFailed">Не удалось загрузить справочник мухурт.</template>
+            <template v-else>Справочник 30 мухурт (55 КБ) подгружается отдельным файлом.</template>
+          </p>
+          <p v-if="muhFailed" style="margin:14px 0 0">
+            <UiButton variant="ghost" @click="loadMuhurtas()">Повторить</UiButton>
+          </p>
+
+          <UiDisclaimer>
+            Границы мухурт считаются от местного восхода и заката
+            (<template v-if="sunrise && sunset">{{ fmtTime(sunrise) }} и {{ fmtTime(sunset) }}</template>
+            <template v-else>восход и закат этого дня</template>): светлое время делится
+            на 15 частей и тёмное на 15. Мухурту выбирают под конкретное дело и
+            вместе с панчангой дня, а не вместо неё.
+          </UiDisclaimer>
+          <UiDisclaimer :entry="disclaimer('muhurta30')" />
+          <p v-if="muhTexts?.src" class="hint" style="margin:10px 0 0">
+            Источник описаний: {{ muhTexts.src }}
+          </p>
+        </UiCard>
+      </UiProOnly>
+
       <UiSectionHead title="Астрологическая причина дня" />
       <UiCard>
         <UiReasonList :items="reasons" />
@@ -639,7 +926,8 @@ const updatedLabel = computed(() =>
           (место по умолчанию — профиль рождения не заполнен)</template><template v-else>
           (по месту рождения из профиля)</template>, описаниях из справочника
         панчанги и титх<template v-if="tara"> и расчёте тара-балы от вашей
-          джанма-накшатры</template>. Йога и карана в расчёт не входят.
+          джанма-накшатры</template>.<template v-if="!yogaNow || !karanaNow">
+          Часть элементов панчанги в этот расчёт не вошла.</template>
       </UiNoteBar>
 
       <UiDisclaimer>

@@ -9,6 +9,9 @@ export const ICONS = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" stroke-linecap="round"/>',
   moon: '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>',
   calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke-linecap="round"/>',
+  // Северо-индийская карта: квадрат, вписанный ромб и обе диагонали —
+  // ровно та же конструкция, что в content/chart_geometry.json.
+  chart: '<rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M12 3.5L20.5 12 12 20.5 3.5 12z"/>',
   heart: '<path d="M12 20s-7.2-4.3-7.2-9.2A4.3 4.3 0 0112 8.6a4.3 4.3 0 017.2 2.2C19.2 15.7 12 20 12 20z"/>',
   lotus: '<path d="M12 3.5c2.4 2.6 3.6 5.2 3.6 7.9S14.4 16.7 12 19.3c-2.4-2.6-3.6-5.2-3.6-7.9S9.6 6.1 12 3.5z"/><path d="M5 20.5h14" stroke-linecap="round"/>',
   book: '<path d="M4.5 5.5A2 2 0 016.5 3.5H19v17H6.5a2 2 0 01-2-2z"/><path d="M4.5 16.5h14.5"/>',

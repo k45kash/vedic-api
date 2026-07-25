@@ -5,16 +5,23 @@
 // POST /api/horoscope + калькуляторы (analyzeChart/dignity) + справочник
 // накшатр (content/nakshatras.json, грузится лениво — 279 КБ).
 //
-// Чего здесь НЕТ и быть не может, пока бэкенд не отдаёт:
-//   • даши (Виншоттари) — API их не считает вообще;
-//   • ретроградность планет — поля retro в ответе нет;
-//   • персональных оценок «N/10» — считать не из чего.
+// Чего здесь НЕТ и быть не может:
+//   • персональных оценок «N/10» — считать не из чего (пометка Б6).
 // Лучше пустое место, чем правдоподобная выдумка (docs/SERVICE-IA.md §9).
+//
+// Проф-глубина (задача 2.9) — три блока под режимом «Астролог»:
+//   • наватара-чакра (calculators/tara.ts → taraChakra, уже готова);
+//   • аспекты и соединения (content/yogakarma.json через calculators/drishti.ts);
+//   • текущие маха- и антар-даша (границы считает бэкенд, трактовки — оттуда же).
+// Оба тяжёлых справочника грузятся отдельными чанками и только когда режим
+// «Астролог» действительно включён.
 import {
   useJyotish, dignity, isGandantaNakshatra,
   nakshatraFromLongitude, NAK_NAMES,
-  loadNakshatras, loadDisclaimers, loadPlanetInNakshatra,
+  loadNakshatras, loadPlanetInNakshatra,
+  planetAspects, planetConjunctions, dashaReading, drishtiTexts,
 } from '~/composables/useJyotish'
+import type { AspectRow, ConjunctionRow, DashaReading, PlanetRu } from '~/composables/useJyotish'
 import type { HoroPlanet } from '~/composables/useBirthProfile'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
@@ -27,7 +34,10 @@ const {
   lagnaReliable, moonUncertain, moonUncertainReason, moonNakshatraCandidates,
   fetchHoroscope,
 } = useBirthProfile()
-const { chart, janmaNakshatra } = useJyotish()
+const { chart, janmaNakshatra, janmaNakshatraName, taraChakraForProfile } = useJyotish()
+// Имя `http`, а не `api`: внутри planetRows уже есть локальная `api` —
+// строка планеты из ответа гороскопа, и одинаковые имена только путали бы.
+const http = useApi()
 
 // ─── Справочники символов ───────────────────────────────────────────────────
 
@@ -103,8 +113,9 @@ const moonSignUncertain = computed(() => {
 })
 
 // ─── Плитки-показатели ──────────────────────────────────────────────────────
-// Четвёртой плиткой раньше была «текущая маха-даша» — убрана: даши не считаются
-// ни на бэкенде, ни здесь. Вместо неё — управитель накшатры (реальное поле nk.lord).
+// Четвёртая плитка — управитель накшатры (поле nk.lord). Маха-даша, которая
+// стояла тут в макете, живёт ниже отдельной секцией: там ей есть что показать
+// (границы периода, подпериод, трактовка), а в плитку помещалось одно имя.
 
 const tiles = computed(() => {
   const h = horoscope.value
@@ -217,7 +228,10 @@ const gandanta = computed(() => {
 })
 
 // ─── Планеты по домам и знакам ──────────────────────────────────────────────
-// Ретро-флага в ответе API нет, поэтому «вакри» не показываем ни в каком виде.
+// Ретроградность (вакри) API теперь отдаёт полем retro — показываем факт
+// движения, без трактовки: описания из content/retrograde.json пока не
+// подключены, а сочинять их нельзя. Узлы у истинного расчёта иногда идут
+// прямо, хотя описания традиции называют их «всегда ретроградными» (А2).
 
 /** Сколько планет видно в режиме «Пользователь»; остальные — только «Астролог». */
 const SIMPLE_PLANETS = 5
@@ -240,6 +254,7 @@ const planetRows = computed(() => {
       name: r.planet,
       glyph: PLANET_GLYPH[r.planet] ?? api?.abbr ?? '',
       position: pos.join(' · '),
+      retro: r.retro,
       dignity: r.dignity ? DIGNITY_SHORT[r.dignity] : null,
       houseText: lagnaReliable.value ? r.inHouseText : '',
       signText: r.inSignText,
@@ -397,6 +412,99 @@ const pinRows = computed(() => {
 
 const pinHidden = computed(() => pinRows.value.filter((r) => r.pro).length)
 
+// ─── Проф-глубина: наватара-чакра ───────────────────────────────────────────
+// Сама чакра считается синхронно (tara.ts статичен, 19 КБ уже в бандле).
+// Единственное, чего не хватает для подсветки, — накшатра Луны СЕГОДНЯ:
+// её отдаёт /api/calendar. Запрос уходит только в режиме «Астролог» и только
+// один раз; не получилось — блок остаётся без подсветки, а не пропадает.
+
+interface ApiNakTransit { nk_num: number; ru: string; dt_start: string; dt_end: string }
+
+const todayNak = ref<{ no: number; ru: string } | null>(null)
+let todayNakRequested = false
+
+async function loadTodayNak() {
+  if (todayNakRequested || !import.meta.client) return
+  const p = profile.value
+  // Место для транзита Луны роли почти не играет (накшатра — величина
+  // геоцентрическая), но берём профиль, если он есть: так же, как на «Сегодня».
+  const lat = Number.isFinite(p?.lat) ? p!.lat : 55.7558
+  const lon = Number.isFinite(p?.lon) ? p!.lon : 37.6176
+  const tz = Number.isFinite(p?.tz) ? p!.tz : 3
+  todayNakRequested = true
+  const now = new Date()
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  try {
+    const rows = await http.post<ApiNakTransit[]>('/api/calendar', {
+      date_start: iso(now),
+      date_end: iso(new Date(now.getTime() + 86400_000)),
+      tz, lat, lon,
+    })
+    const hit = (rows ?? []).find((r) => new Date(r.dt_start) <= now && now < new Date(r.dt_end))
+      ?? rows?.[0]
+    todayNak.value = hit ? { no: hit.nk_num, ru: hit.ru } : null
+  } catch {
+    todayNak.value = null // подсветки не будет — это честнее, чем угадывать
+  }
+}
+
+// ─── Проф-глубина: аспекты, соединения, периоды (yogakarma.json, 79 КБ) ─────
+
+const aspects = ref<AspectRow[]>([])
+const conjunctions = ref<ConjunctionRow[]>([])
+const dasha = ref<DashaReading | null>(null)
+const ykTexts = ref<{ aspectsNote: string; aspectsSrc: string; conjunctionsSrc: string; dashasSrc: string } | null>(null)
+const ykLoading = ref(false)
+const ykFailed = ref(false)
+
+/** Планеты карты для расчёта аспектов: имя + знак, больше ничего не нужно. */
+const drishtiInput = computed(() =>
+  (horoscope.value?.planets ?? [])
+    .filter((p) => p.available)
+    .map((p) => ({ name: p.name as PlanetRu, sign: p.sign_num })),
+)
+
+/** Текущий период Вимшоттари из ответа /api/horoscope.
+ * Поле появилось на бэкенде позже описания HoroscopeResult, поэтому читаем
+ * через каст — структура проверена живым ответом (см. отчёт). */
+const dashaCurrent = computed<any | null>(() => (horoscope.value as any)?.dasha_current ?? null)
+
+async function loadYogakarma() {
+  if (ykLoading.value || !drishtiInput.value.length) return
+  ykLoading.value = true
+  ykFailed.value = false
+  try {
+    // Дома считаем только при достоверной Лагне — иначе номера домов
+    // произвольны, и в аспектах останутся одни знаки.
+    const lagna = lagnaReliable.value ? horoscope.value?.lagna.sign_num ?? null : null
+    const [a, c, t] = await Promise.all([
+      planetAspects(drishtiInput.value, lagna),
+      planetConjunctions(drishtiInput.value, lagna),
+      drishtiTexts(),
+    ])
+    aspects.value = a
+    conjunctions.value = c
+    ykTexts.value = t
+    const d = dashaCurrent.value
+    dasha.value = d
+      ? await dashaReading(d.mahadasha?.lord_id ?? null, d.antardasha?.lord_id ?? null)
+      : null
+  } catch {
+    ykFailed.value = true
+  } finally {
+    ykLoading.value = false
+  }
+}
+
+// Проф-блоки в вёрстке всегда присутствуют (их прячет CSS), поэтому грузить
+// их данные надо не при монтировании, а при реальном включении режима.
+watch([isPro, horoscope], ([pro, h]) => {
+  if (!pro || !h) return
+  loadTodayNak()
+  loadYogakarma()
+}, { immediate: true })
+
 // ─── Дома (только при достоверной Лагне) ────────────────────────────────────
 
 const houseRows = computed(() => {
@@ -447,19 +555,12 @@ const chartCells = computed(() => {
   })
 })
 
-// ─── Готовые дисклеймеры (content/disclaimers.json, ленивая загрузка) ───────
+// ─── Готовые тексты из content/ (задача 2.8) ────────────────────────────────
+// Дисклеймеры достоверности и вводные абзацы не пишем в разметке: они живут
+// в content/disclaimers.json и content/ui_texts.json, а сюда попадают по ключу.
 
-const disc = ref<Record<string, string>>({})
-onMounted(async () => {
-  try {
-    const d = await loadDisclaimers()
-    const map: Record<string, string> = {}
-    for (const s of d.sections ?? []) if (!map[s.section]) map[s.section] = s.text
-    disc.value = map
-  } catch {
-    disc.value = {}
-  }
-})
+const { disclaimer } = useDisclaimers()
+const { t } = useUiTexts()
 </script>
 
 <template>
@@ -585,6 +686,10 @@ onMounted(async () => {
                 <UiKv k="Доша" :v="nak.dosha" />
                 <UiKv k="Природа" :v="nak.nature" />
                 <p v-if="padaText" class="hint" style="margin:12px 0 0">{{ padaText }}</p>
+                <!-- Доша — то самое поле, из которого читается нади (А1). Экрана
+                     совместимости в кабинете пока нет, поэтому пометка стоит там,
+                     где нади вообще упоминается. -->
+                <UiMethodNote id="А1" />
               </div>
             </UiProOnly>
           </UiCard>
@@ -614,7 +719,10 @@ onMounted(async () => {
         <p v-if="nak?.note" class="hint" style="margin:10px 0 0">{{ nak.note }}</p>
 
         <!-- ─── Планеты ─────────────────────────────────────────────────── -->
-        <UiSectionHead title="Планеты по домам и знакам" />
+        <UiSectionHead>
+          Планеты по домам и знакам
+          <UiMethodNote id="А2" />
+        </UiSectionHead>
         <UiCard>
           <UiProRow
             v-for="row in planetRows"
@@ -625,6 +733,10 @@ onMounted(async () => {
             :dignity="row.dignity"
             :pro="row.pro"
           >
+            <template #position>
+              {{ row.position }}
+              <UiChip v-if="row.retro" variant="neutral" class="pin-chip">вакри (ретроградна)</UiChip>
+            </template>
             {{ row.houseText || row.signText }}
             <UiProOnly v-if="row.houseText && row.signText">
               <p class="hint" style="margin:8px 0 0">{{ row.signText }}</p>
@@ -635,15 +747,16 @@ onMounted(async () => {
             <p class="hint" style="margin:14px 0 0">
               <template v-if="lagnaReliable">Дома — Whole Sign от Лагны. </template>
               Достоинство определяется по знаку, без точного градуса экзальтации.
-              Ретро-статус (вакри) не показан: API его не отдаёт, а рисовать его
-              «по памяти» нельзя.
+              Ретроградность (вакри) показана как факт движения; расчёт ведётся
+              по истинному узлу, поэтому Раху и Кету у нас иногда идут прямо,
+              хотя традиция называет их «всегда ретроградными».
             </p>
           </UiProOnly>
           <p v-if="hiddenPlanets" class="hint hint--simple" style="margin:14px 0 0">
             Ещё {{ hiddenPlanets }} планет и карта домов — в режиме «Астролог».
           </p>
         </UiCard>
-        <UiDisclaimer v-if="disc.placements">{{ disc.placements }}</UiDisclaimer>
+        <UiDisclaimer :entry="disclaimer('placements')" />
 
         <!-- ─── Планеты в накшатрах (243 трактовки, ленивые 293 КБ) ──────── -->
         <div ref="pinAnchor" class="pin-anchor" aria-hidden="true" />
@@ -715,6 +828,115 @@ onMounted(async () => {
           классика. Полная картина складывается из всей карты, а не из одной строки.
         </UiDisclaimer>
 
+        <!-- ─── Проф-глубина: наватара-чакра ─────────────────────────────── -->
+        <UiProOnly v-if="taraChakraForProfile && janmaNakshatraName">
+          <UiSectionHead flag="Астролог">
+            Наватара-чакра
+            <UiMethodNote id="А8" />
+          </UiSectionHead>
+          <UiCard>
+            <p class="hint" style="margin:0 0 16px">
+              Двадцать семь накшатр, разложенные от вашей джанма-накшатры по
+              девяти тарам в три цикла. Тара повторяется каждые девять накшатр,
+              поэтому у каждой накшатры своё место в вашей личной сетке — от неё
+              и считается тара-бала дня.
+            </p>
+            <ProNavatara
+              :cells="taraChakraForProfile"
+              :janma-name="janmaNakshatraName"
+              :today-no="todayNak?.no ?? null"
+              :today-name="todayNak?.ru"
+              :janma-uncertain="moonUncertain"
+            />
+            <UiDisclaimer>
+              Убывание силы неблагоприятных тар от цикла к циклу (Джанмаркша →
+              Кармаркша → Адханаркша) и правило 27-й накшатры — методы школы,
+              из которой пришли эти данные, а не общий канон: часть школ
+              называет в этой роли 22-ю или 23-ю накшатру.
+            </UiDisclaimer>
+          </UiCard>
+        </UiProOnly>
+
+        <!-- ─── Проф-глубина: аспекты и соединения ───────────────────────── -->
+        <UiProOnly>
+          <UiSectionHead flag="Астролог">
+            Аспекты и соединения
+            <UiMethodNote id="А12" />
+          </UiSectionHead>
+          <UiCard>
+            <!-- Вводный абзац — из content/ui_texts.json (yogakarma_intro):
+                 он описывает ровно эти три слоя, включая периоды ниже. -->
+            <p v-if="t('yogakarma_intro')" class="hint" style="margin:0 0 10px">
+              {{ t('yogakarma_intro') }}
+            </p>
+            <p class="hint" style="margin:0 0 16px">
+              Дришти — «взгляд» планеты: все планеты смотрят на 7-й дом от себя,
+              у Марса, Юпитера и Сатурна есть дополнительные особые аспекты.
+              Счёт ведётся по знакам в раскладке Whole Sign.
+            </p>
+
+            <ProAspects
+              v-if="aspects.length"
+              :rows="aspects"
+              :conjunctions="conjunctions"
+              :lagna-reliable="lagnaReliable"
+              :note="ykTexts?.aspectsNote"
+              :glyphs="PLANET_GLYPH"
+            />
+            <p v-else class="hint" style="margin:0">
+              <template v-if="ykLoading">Загружаем справочник аспектов…</template>
+              <template v-else-if="ykFailed">Не удалось загрузить справочник аспектов.</template>
+              <template v-else>Справочник аспектов (79 КБ) подгружается отдельным файлом.</template>
+            </p>
+            <p v-if="ykFailed" style="margin:14px 0 0">
+              <UiButton variant="ghost" @click="loadYogakarma()">Повторить</UiButton>
+            </p>
+
+            <UiDisclaimer>
+              Показаны только <b>полные</b> аспекты и только по знакам: градусной
+              силы аспекта (дришти-бала) и частичных аспектов в данных нет, поэтому
+              их здесь нет тоже. Соединением считается стоянка в одном знаке — без
+              орбиса в градусах, поэтому планеты в разных концах знака попадут
+              в одну строку. Пятый и девятый аспекты Раху и Кету помечены «по ряду
+              школ» — так они записаны в самом справочнике.
+            </UiDisclaimer>
+            <UiDisclaimer :entry="disclaimer('aspects')" />
+            <UiDisclaimer v-if="conjunctions.length" :entry="disclaimer('conjunctions')" />
+            <p v-if="ykTexts?.aspectsSrc" class="hint" style="margin:10px 0 0">
+              Источник: {{ ykTexts.aspectsSrc }}
+            </p>
+          </UiCard>
+        </UiProOnly>
+
+        <!-- ─── Проф-глубина: текущий период Вимшоттари ──────────────────── -->
+        <UiProOnly v-if="dashaCurrent?.mahadasha">
+          <UiSectionHead flag="Астролог">
+            Периоды Вимшоттари
+            <UiMethodNote id="А3" />
+          </UiSectionHead>
+          <UiCard>
+            <ProDasha
+              :maha="dashaCurrent.mahadasha"
+              :antar="dashaCurrent.antardasha"
+              :reading="dasha"
+              :as-of="dashaCurrent.as_of"
+              :moon-uncertain="moonUncertain"
+            />
+            <p v-if="ykLoading && !dasha" class="hint" style="margin:12px 0 0">
+              Загружаем трактовки периодов…
+            </p>
+            <UiDisclaimer>
+              Даши — часть натальной карты, а не отдельный «календарь событий»:
+              период окрашивает темы своей планеты, а что именно произойдёт,
+              зависит от её силы, дома и всей карты. Здесь показан только текущий
+              период с подпериодом — полное дерево периодов появится вместе
+              с разделом карты.
+            </UiDisclaimer>
+            <UiDisclaimer :entry="disclaimer('dashas')" />
+            <UiDisclaimer v-if="dashaCurrent?.antardasha" :entry="disclaimer('antardashas')" />
+          </UiCard>
+        </UiProOnly>
+
         <!-- ─── Дома (проф-глубина, только при достоверной Лагне) ────────── -->
         <UiProOnly v-if="lagnaReliable">
           <UiSectionHead title="Карта домов" flag="Астролог" />
@@ -761,10 +983,14 @@ onMounted(async () => {
               </UiKv>
             </UiCard>
           </div>
-          <UiDisclaimer v-if="disc['chart-full']">{{ disc['chart-full'] }}</UiDisclaimer>
+          <UiDisclaimer :entry="disclaimer('chart-full')" />
         </UiProOnly>
 
-        <UiDisclaimer v-if="disc['chart-analysis']">{{ disc['chart-analysis'] }}</UiDisclaimer>
+        <UiDisclaimer :entry="disclaimer('chart-analysis')" />
+
+        <!-- Тексты кабинета — пересказ классики, поэтому ссылка на
+             первоисточники доступна с экрана, а не только из документации. -->
+        <UiSources />
       </template>
     </template>
   </section>

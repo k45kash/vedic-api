@@ -120,6 +120,9 @@ const api = useApi()
 const { setPageHeader } = usePageHeader()
 const { profile, hasProfile, fetchHoroscope } = useBirthProfile()
 const { janmaNakshatra, janmaNakshatraName } = useJyotish()
+// Дисклеймеры достоверности и вводные абзацы — из content/ (задача 2.8).
+const { disclaimer } = useDisclaimers()
+const { t } = useUiTexts()
 
 /** Место расчёта. Своего «текущего города» в профиле нет — берём место
  * рождения; без профиля считаем по Москве (та же логика, что на /today). */
@@ -615,7 +618,12 @@ const updatedLabel = computed(() =>
 
     <!-- ═══════════ РЕЗУЛЬТАТ ═══════════ -->
     <template v-else-if="rows.length && currentEvent">
-      <UiSectionHead :title="`Итог: ${eventLabel(currentEvent).toLowerCase()}`" />
+      <UiSectionHead>
+        Итог: {{ eventLabel(currentEvent).toLowerCase() }}
+        <UiMethodNote id="А9" />
+      </UiSectionHead>
+      <!-- Вводный абзац модели — из content/ui_texts.json (picker_lead). -->
+      <p v-if="t('picker_lead')" class="pd-msg">{{ t('picker_lead') }}</p>
 
       <UiCard>
         <UiVerdict
@@ -641,12 +649,13 @@ const updatedLabel = computed(() =>
           </template>
         </UiVerdict>
 
-        <UiDisclaimer tone="warn">
-          Веса факторов (тара 4, накшатра 3, титхи 2, день недели 2, йога 1)
-          и пороги вердиктов — <b>метод школы, а не канон</b>. Другие традиции
-          расставляют приоритеты иначе и могут дать другой ответ на тот же день.
-          Это ориентир для выбора, а не разрешение и не запрет.
-        </UiDisclaimer>
+        <!-- Про веса: словами автора — из content/ui_texts.json (picker_hint),
+             точные числа и наша развилка — в пометке А9 у заголовка. -->
+        <p v-if="t('picker_hint')" class="hint" style="margin:14px 0 0">
+          {{ t('picker_hint') }}
+        </p>
+
+        <UiDisclaimer tone="warn" :entry="disclaimer('event-picker')" />
 
         <UiDisclaimer>
           В оценку <b>не входят</b> нитья-йога и карана: сервис их не считает,
@@ -726,11 +735,10 @@ const updatedLabel = computed(() =>
             Эти сутки посчитать не удалось: {{ selected.problem }}.
           </p>
 
-          <!-- Списки справочника показываем как есть. Это не украшение:
-               модель сверяет титхи ПО НОМЕРУ, поэтому пункты, записанные словом
-               («Амавасья», «Пурнима»), в баллы не попадают — они учтены только
-               там, где для события заведён отдельный стоп-фактор. Пусть это
-               будет видно глазами, а не спрятано за процентом. -->
+          <!-- Списки справочника показываем как есть: процент — это свёртка,
+               а решение принимают по самим спискам. Титхи, записанные словом
+               («Амавасья», «Пурнима»), и категория «гандантовые» в баллы теперь
+               входят — см. пометки Б2 и Б3 ниже. -->
           <div class="pd-subhead">Что справочник говорит об этом событии</div>
           <UiKv
             v-if="currentEvent.good_nakshatras?.length"
@@ -763,11 +771,17 @@ const updatedLabel = computed(() =>
             tone="bad"
           />
           <UiDisclaimer>
-            Баллы модель ставит по номеру титхи, накшатре и дню недели. Пункты
-            списков, записанные словом («Амавасья», «Пурнима», «гандантовые»,
-            «по ряду школ»), в арифметику не попадают — они учтены только там,
-            где для события заведён отдельный стоп-фактор. Сверьте список глазами.
+            Баллы модель ставит по накшатре, номеру титхи и дню недели; титхи,
+            записанные словом («Амавасья», «Пурнима»), и категория «гандантовые»
+            тоже учитываются. Оговорку «по ряду школ» модель не различает —
+            такая запись считается обычным совпадением, поэтому список стоит
+            сверить глазами.
           </UiDisclaimer>
+          <div class="pd-notes">
+            <UiMethodNote id="Б2" />
+            <UiMethodNote id="Б3" />
+          </div>
+          <UiDisclaimer :entry="disclaimer('events-muhurta')" />
 
           <template v-if="selectedKalamItems.length">
             <div class="pd-subhead">В какие часы этого дня не начинать</div>
@@ -779,6 +793,7 @@ const updatedLabel = computed(() =>
               восхода и в схеме для Гулики — это ориентир, а не запрет.
               <b>В балл дня эти отрезки не входят.</b>
             </UiDisclaimer>
+            <UiMethodNote id="А4" />
           </template>
 
           <UiProOnly>
@@ -909,6 +924,15 @@ const updatedLabel = computed(() =>
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
+}
+
+/* Пометки методики идут парой (Б2 и Б3) — ставим их в строку, чтобы
+   свёрнутые значки не занимали два отдельных ряда. */
+.pd-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* ── Поля ввода ── */

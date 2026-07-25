@@ -507,6 +507,222 @@ html:has(> body.vd-scope){height:100%}
 .vd-app .card__head--stack{align-items:flex-start}
 .vd-app .card__sub{font-size:12.5px;color:var(--muted);margin-top:3px}
 
+/* ===================== МЕТОДИЧЕСКИЕ ПОМЕТКИ ===================== */
+/* Спорная методика, помеченная прямо на странице (UiMethodNote).
+   Свёрнутая — тихий значок у заголовка; развёрнутая — плашка во всю ширину
+   родителя. Цвет несёт смысл: лавандовый — вопрос к астрологу, золотой —
+   метод конкретной школы, серый — уточнение и отсутствие данных. */
+.vd-app .mnote{display:inline-flex;flex-direction:column;gap:8px;vertical-align:middle}
+.vd-app .mnote.is-open{display:flex;width:100%;margin-top:10px}
+.vd-app .mnote__pin{
+  display:inline-flex;align-items:center;gap:6px;align-self:flex-start;
+  padding:3px 9px 3px 7px;border:1px solid var(--line-2);border-radius:999px;
+  background:var(--surface-2);color:var(--muted);
+  font:inherit;font-size:11px;letter-spacing:.02em;cursor:pointer;
+  transition:border-color var(--d-fast) var(--e-out),color var(--d-fast) var(--e-out);
+}
+.vd-app .mnote__pin:hover{border-color:var(--accent-line);color:var(--accent-ink)}
+.vd-app .mnote__pin svg{width:14px;height:14px;flex:none}
+.vd-app .mnote__id{font-weight:600;letter-spacing:.04em}
+.vd-app .mnote__kind{text-transform:lowercase}
+.vd-app .mnote--ask .mnote__pin{border-color:var(--accent-line);color:var(--accent-ink);background:var(--accent-soft)}
+.vd-app .mnote--school .mnote__pin{border-color:var(--gold-line);color:var(--gold-ink);background:var(--gold-soft)}
+.vd-app .mnote__body{
+  display:flex;flex-direction:column;gap:6px;
+  padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--line-2);
+  border-radius:var(--r-md);background:var(--surface-2);
+  font-size:12.5px;line-height:1.5;color:var(--body);
+}
+.vd-app .mnote--ask .mnote__body{border-left-color:var(--accent)}
+.vd-app .mnote--school .mnote__body{border-left-color:var(--gold)}
+.vd-app .mnote__title{font-weight:600;font-size:13px}
+.vd-app .mnote__row b{font-weight:600;color:var(--muted)}
+.vd-app .mnote__row--ask b{color:var(--accent-ink)}
+
+/* ===================== ЭКРАН «КАРТА» ===================== */
+/* Раши-чакра, таблица положений и раскрывающиеся трактовки (pages/chart.vue).
+   Отдельно от .chart с /me: та карта — маленькая иллюстрация в проф-блоке,
+   эта — главный объект страницы, ей нужен другой размер и другая типографика. */
+
+.vd-app .rchart{
+  display:block;width:100%;max-width:420px;height:auto;margin:0 auto;
+  /* Цифры и сокращения в клетках — тем же гротеском, что и весь кабинет. */
+  font-family:var(--sans);
+}
+.vd-app .rchart text{font-family:var(--sans)}
+
+/* Шапка карточки с картой: заголовок слева, переключатель начертания справа.
+   Правило заведено на .chart-card, чтобы не трогать шапки всех остальных
+   карточек кабинета. */
+.vd-app .chart-card .card__head{flex-wrap:wrap;gap:10px 14px}
+.vd-app .chart-seg{margin-left:auto}
+
+/* легенда под картой */
+.vd-app .chart-legend{
+  display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;
+  margin-top:14px;font-size:12px;color:var(--muted);
+}
+.vd-app .chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.vd-app .chart-legend .lg{font-weight:600;color:var(--gold-ink)}
+.vd-app .chart-legend .lg--ex{color:var(--good)}
+.vd-app .chart-legend .lg--deb{color:var(--bad)}
+.vd-app .lg-sw{
+  width:13px;height:13px;border-radius:3px;border:1px solid var(--line-2);flex:none;
+}
+.vd-app .lg-sw--tri{background:var(--good-soft)}
+.vd-app .lg-sw--ken{background:var(--neu-soft)}
+.vd-app .lg-sw--duh{background:var(--bad-soft)}
+.vd-app .lg-sw--upa{background:var(--gold-soft)}
+
+/* переключатели под картой (проф-режим) */
+.vd-app .chart-tools{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.vd-app .chart-check{
+  display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--body);cursor:pointer;
+}
+.vd-app .chart-check input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.vd-app .chart-legend--groups{justify-content:flex-start;margin-top:10px}
+
+/* --- таблица положений --- */
+/* Горизонтальная прокрутка только у самой таблицы: страница по горизонтали
+   не едет даже на узком телефоне. */
+.vd-app .ptable__scroll{overflow-x:auto;margin:0 -6px;padding:0 6px}
+.vd-app .ptable{width:100%;border-collapse:collapse;font-size:13.5px;white-space:nowrap}
+.vd-app .ptable th,
+.vd-app .ptable td{padding:10px 12px 10px 0;text-align:left;vertical-align:middle}
+.vd-app .ptable thead th{
+  font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);border-bottom:1px solid var(--line-2);padding-bottom:9px;
+}
+.vd-app .ptable tbody tr{border-top:1px solid var(--line)}
+.vd-app .ptable tbody tr:first-child{border-top:0}
+.vd-app .ptable tbody th{color:var(--ink);font-weight:600}
+.vd-app .ptable tbody td{color:var(--body)}
+.vd-app .ptable__glyph{
+  display:inline-grid;place-items:center;width:24px;height:24px;margin-right:9px;
+  border-radius:50%;background:var(--gold-soft);color:var(--gold-ink);font-size:13px;
+  vertical-align:-6px;
+  font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans",serif;
+  font-variant-emoji:text;
+}
+.vd-app .ptable__num{font-variant-numeric:tabular-nums}
+.vd-app .ptable__dash{color:var(--muted)}
+.vd-app .ptable__retro{color:var(--gold-ink);font-weight:600}
+.vd-app .ptable__stat{
+  margin-left:7px;font-size:11px;color:var(--muted);
+  border:1px solid var(--line-2);border-radius:var(--r-pill);padding:1px 7px;
+}
+.vd-app .ptable .dig{margin-left:0}
+
+/* Проф-колонки: прячем классом, а не v-if — переключение режима не должно
+   перестраивать таблицу (тот же приём, что у .pro во всём кабинете). */
+.vd-app .ptable .pro-cell{display:none}
+.vd-app.is-pro .ptable .pro-cell{display:table-cell}
+
+/* --- раскрывающаяся трактовка --- */
+.vd-app .disc-item{border-top:1px solid var(--line)}
+.vd-app .disc-item:first-of-type{border-top:0}
+.vd-app .disc-item__head{
+  display:flex;align-items:center;gap:10px;padding:12px 0;cursor:pointer;list-style:none;
+}
+.vd-app .disc-item__head::-webkit-details-marker{display:none}
+.vd-app .disc-item__glyph{
+  display:grid;place-items:center;width:26px;height:26px;flex:none;border-radius:50%;
+  background:var(--gold-soft);color:var(--gold-ink);font-size:14px;
+  font-family:"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans",serif;
+  font-variant-emoji:text;
+}
+.vd-app .disc-item__title{font-size:14.5px;font-weight:600;color:var(--ink)}
+.vd-app .disc-item__meta{
+  font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.vd-app .disc-item__spacer{flex:1;min-width:8px}
+.vd-app .disc-item__tag{flex:none;margin-left:0}
+.vd-app .disc-item__chev{
+  width:17px;height:17px;flex:none;color:var(--muted);
+  transition:transform var(--d-fast) var(--e-out);
+}
+.vd-app .disc-item[open] .disc-item__chev{transform:rotate(180deg)}
+.vd-app .disc-item__body{
+  padding:0 0 16px 36px;font-size:14px;color:var(--body);line-height:1.6;
+}
+.vd-app .disc-item__pro{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+
+@media (max-width:1100px){
+  .vd-app .rchart{max-width:360px}
+}
+@media (max-width:640px){
+  .vd-app .rchart{max-width:100%}
+  /* переключатель начертания уходит на свою строку и занимает её целиком */
+  .vd-app .chart-seg{margin-left:0;width:100%}
+  .vd-app .chart-seg button{flex:1}
+  /* Позиция планеты не влезает в одну строку с заголовком и чипом —
+     переносим её отдельной строкой, а не прячем: она несёт смысл. */
+  .vd-app .disc-item__head{flex-wrap:wrap}
+  .vd-app .disc-item__meta{order:5;width:100%;padding-left:36px;white-space:normal;overflow:visible}
+  .vd-app .disc-item__spacer{display:none}
+  .vd-app .disc-item__chev{margin-left:auto}
+  .vd-app .disc-item__body{padding-left:0}
+  .vd-app .ptable{font-size:13px}
+}
+
+/* ===================== МЕТКИ ДОСТОВЕРНОСТИ И ИСТОЧНИКИ ===================== */
+/* Дисклеймеры кабинета берутся из content/disclaimers.json, и у каждой секции
+   там задан тип источника. Метка показывает его словами из легенды файла:
+   зелёная — твёрдая классика, золотая — школы расходятся, серая —
+   реконструкция. Цвет тот же, что у остальных статусов кита: новых не вводим. */
+.vd-app .disc__mark{
+  display:inline-flex;align-items:center;margin-right:8px;padding:1px 8px;
+  border:1px solid var(--line-2);border-radius:var(--r-pill);
+  background:var(--surface-2);color:var(--muted);
+  font-size:10.5px;font-weight:600;letter-spacing:.03em;white-space:nowrap;
+  vertical-align:1px;cursor:help;
+}
+.vd-app .disc__mark--verified{background:var(--good-soft);border-color:var(--good-line);color:var(--good)}
+.vd-app .disc__mark--needs-check{background:var(--gold-soft);border-color:var(--gold-line);color:var(--gold-ink)}
+.vd-app .disc__mark--model{background:var(--neu-soft);border-color:var(--neu-line);color:var(--neu)}
+/* Пометки автора внутри текстов — нейтральные: это его словарь, не наша оценка. */
+.vd-app .disc__mark--inline{background:var(--surface-3);border-color:var(--line-2);color:var(--muted)}
+
+/* Пометка методики, раскрытая прямо в заголовке секции. Заголовок набран
+   капителью с большим трекингом, и без сброса текст плашки читался бы как
+   продолжение заголовка. Заодно разрешаем заголовку перенос — раскрытая
+   плашка встаёт отдельной строкой, а не сжимает название секции. */
+.vd-app .sechead{flex-wrap:wrap}
+.vd-app .sechead .mnote__body{
+  text-transform:none;letter-spacing:normal;font-weight:400;
+  font-size:12.5px;line-height:1.5;color:var(--body);
+}
+.vd-app .sechead .mnote__title{font-weight:600;font-size:13px}
+.vd-app .sechead .mnote__row b{font-weight:600}
+
+/* Сворачиваемый блок «Источники»: тихая сноска внизу страницы, а не раздел. */
+.vd-app .sources{
+  margin-top:26px;border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--surface-2);
+}
+.vd-app .sources__head{
+  display:flex;align-items:center;gap:9px;padding:11px 14px;
+  cursor:pointer;list-style:none;color:var(--muted);
+}
+.vd-app .sources__head::-webkit-details-marker{display:none}
+.vd-app .sources__head svg{width:16px;height:16px;flex:none}
+.vd-app .sources__title{font-size:12.5px}
+.vd-app .sources__chev{margin-left:auto;transition:transform var(--d-fast) var(--e-out)}
+.vd-app .sources[open] .sources__chev{transform:rotate(180deg)}
+.vd-app .sources__body{padding:0 14px 14px;border-top:1px solid var(--line)}
+.vd-app .sources__intro{margin:12px 0 0;font-size:12.5px;line-height:1.55;color:var(--body)}
+.vd-app .sources__group{margin-top:14px}
+.vd-app .sources__gtitle{
+  font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+}
+.vd-app .sources__gtitle--legend{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.vd-app .sources__item{margin-top:9px}
+.vd-app .sources__name{font-size:13px;color:var(--ink);font-weight:500}
+.vd-app .sources__by{color:var(--muted);font-weight:400}
+.vd-app .sources__note{font-size:12px;line-height:1.5;color:var(--muted);margin:2px 0 0}
+.vd-app .sources__note--foot{margin-top:14px}
+.vd-app .sources__legend{display:flex;align-items:baseline;gap:4px;margin-top:9px}
+
 /* ===================== АДАПТИВ ===================== */
 @media (max-width:1400px){
   /* локация в шапке уходит первой — она самая широкая и наименее нужная */

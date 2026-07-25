@@ -96,10 +96,25 @@ export const loadGlossary = () => json<any>(import('~content/glossary.json'))
 export const loadDisclaimers = () => json<any>(import('~content/disclaimers.json'))
 /** Тексты интерфейса — 15 КБ. */
 export const loadUiTexts = () => json<any>(import('~content/ui_texts.json'))
+/** Первоисточники и благодарности — 5 КБ. */
+export const loadSources = () => json<any>(import('~content/sources.json'))
 /** Ретроградность планет — 11 КБ. */
 export const loadRetrograde = () => json<any>(import('~content/retrograde.json'))
 /** Геометрия SVG-карты — 2,6 КБ. */
 export const loadChartGeometry = () => json<any>(import('~content/chart_geometry.json'))
+// Три справочника ниже уже лежат в статическом чанке — их напрямую импортирует
+// calculators/chart.ts. Отдельного чанка Vite для них не создаст (и честно
+// предупреждает об этом при сборке), сетевого запроса тоже не будет. Загрузчики
+// заведены не ради размера, а ради единого доступа: страницы не должны
+// импортировать ~content напрямую, а когда часть контента уедет за API
+// (docs/PLAN.md, задача 3.5), поменяется только тело этих функций.
+
+/** 12 домов: группы, пурушартха, каракаки, диг-бала, описания — 30 КБ. */
+export const loadHouses = () => json<any>(import('~content/houses.json'))
+/** 12 знаков: стихия, качество, управитель, экзальтация/падение — 17 КБ. */
+export const loadSigns = () => json<any>(import('~content/signs.json'))
+/** Планеты в домах и знаках: 9 × (12 + 12) трактовок + вводные тексты — 53 КБ. */
+export const loadPlacements = () => json<any>(import('~content/placements.json'))
 
 // ─── Композабл: расчёты поверх текущего профиля рождения ────────────────────
 
@@ -152,4 +167,56 @@ export function useJyotish() {
     taraChakraForProfile,
     taraForDay,
   }
+}
+
+// ─── Проф-глубина (задача 2.9): аспекты, соединения, периоды, 30 мухурт ─────
+// Оба модуля тянут крупные JSON (yogakarma 79 КБ, muhurta30 55 КБ), поэтому
+// подключаются только динамическим import() — своим чанком на каждую тему.
+// Типы реэкспортируются как type-only: сами модули в бандл от этого не едут.
+
+export type {
+  AspectRow, AspectTarget, ConjunctionRow, DashaReading, DrishtiInput,
+} from '~calc/drishti'
+export type { ApiMuhurta, DayMuhurta } from '~calc/muhurta'
+
+/** Аспекты (дришти) всех планет карты. Тянет yogakarma.json (79 КБ). */
+export async function planetAspects(
+  planets: import('~calc/drishti').DrishtiInput[],
+  lagnaSign: number | null,
+) {
+  const m = await import('~calc/drishti')
+  return m.planetAspects(planets, lagnaSign)
+}
+
+/** Соединения (юти): планеты в одном знаке. Тянет yogakarma.json. */
+export async function planetConjunctions(
+  planets: import('~calc/drishti').DrishtiInput[],
+  lagnaSign: number | null,
+) {
+  const m = await import('~calc/drishti')
+  return m.conjunctions(planets, lagnaSign)
+}
+
+/** Трактовки текущей маха-даши и антар-даши по id планет. Тянет yogakarma.json. */
+export async function dashaReading(mahaId: string | null, antarId: string | null) {
+  const m = await import('~calc/drishti')
+  return m.dashaReading(mahaId, antarId)
+}
+
+/** Тексты справочника йогакармы (интро, примечания, источники). */
+export async function drishtiTexts() {
+  const m = await import('~calc/drishti')
+  return m.DRISHTI_TEXTS
+}
+
+/** 30 мухурт суток: времена из /api/panchang + описания. Тянет muhurta30.json (55 КБ). */
+export async function dayMuhurtas(list: import('~calc/muhurta').ApiMuhurta[]) {
+  const m = await import('~calc/muhurta')
+  return m.dayMuhurtas(list)
+}
+
+/** Тексты справочника 30 мухурт (метод деления, источники). */
+export async function muhurtaTexts() {
+  const m = await import('~calc/muhurta')
+  return m.MUHURTA_TEXTS
 }

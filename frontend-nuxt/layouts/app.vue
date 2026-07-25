@@ -7,23 +7,36 @@
 // assets/css/tokens.css и заскоуплены под корневой класс .vd-app,
 // а фон страницы включает класс .vd-scope на <body> (см. useHead ниже).
 
+import type { IconName } from '~/utils/icons'
+
 const route = useRoute()
 const { header } = usePageHeader()
 const { isDark, toggleTheme } = useTheme()
 const { isPro, setAudience } = useAudience()
 const auth = useAuth()
 
-// Пункты сайдбара. Первые три — рабочие маршруты, остальные пока задизейблены
+// Пункты сайдбара. Первые четыре — рабочие маршруты, остальные пока задизейблены
 // с меткой «скоро», как в прототипе.
-const navItems = [
+// Тип объявлен явно, а не выведен из `as const`: иначе объединение вариантов
+// «с to» и «с soon» не имеет общего поля `to`, и шаблонная проверка `v-if="item.to"`
+// не тайпчекается.
+interface NavItem {
+  label: string
+  icon: IconName
+  to?: string
+  soon?: boolean
+}
+
+const navItems: readonly NavItem[] = [
   { label: 'Обо мне', icon: 'user', to: '/me' },
+  { label: 'Карта', icon: 'chart', to: '/chart' },
   { label: 'Сегодня', icon: 'sun', to: '/today' },
   { label: 'Подобрать дату', icon: 'calendar', to: '/pick-date' },
   { label: 'Совместимость', icon: 'heart', soon: true },
   { label: 'Практики', icon: 'lotus', soon: true },
   { label: 'Справочник', icon: 'book', soon: true },
   { label: 'Настройки', icon: 'settings', soon: true },
-] as const
+]
 
 // --- мобильное меню ---
 const menuOpen = ref(false)

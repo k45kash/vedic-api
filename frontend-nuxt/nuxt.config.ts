@@ -46,6 +46,7 @@ export default defineNuxtConfig({
         '/auth/callback',
         '/dashboard',
         '/me',
+        '/chart',
         '/today',
         '/pick-date',
       ],
