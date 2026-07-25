@@ -22,6 +22,7 @@ from Panchangam import calc_panchang
 from nakshatra_calculator import calculate
 from nakshatra_calendar import calc_calendar
 from sade_sati import calc_sade_sati
+from vimshottari import calc_vimshottari
 
 from auth.db import init_db
 from auth.router import router as auth_router
@@ -76,6 +77,19 @@ class HoroscopeRequest(BaseModel):
     tz: float
     lat: float
     lon: float
+
+
+class DashaRequest(BaseModel):
+    year: int
+    month: int
+    day: int
+    hour: int = 12
+    minute: int = 0
+    tz: float
+    lat: float = 0.0
+    lon: float = 0.0
+    # 1 — маха-даши, 2 — с антар-дашами, 3+ — пратьянтар и глубже.
+    levels: int = 2
 
 
 class CalendarRequest(BaseModel):
@@ -197,7 +211,40 @@ def horoscope(req: HoroscopeRequest):
             lat=req.lat,
             lon=req.lon,
         )
+        # Текущий период Вимшоттари — только он, без дерева периодов.
+        # Полное дерево весит ~40 КБ и нужно далеко не на каждом экране,
+        # поэтому оно живёт отдельным /api/dasha, а здесь лежит ровно
+        # столько, сколько нужно плитке «текущая маха-даша».
+        try:
+            birth = datetime(req.year, req.month, req.day, req.hour, req.minute)
+            result["dasha_current"] = calc_vimshottari(
+                result["moon_sid"], birth, levels=2
+            )["current"]
+        except Exception as e:
+            # Даши не должны ронять весь гороскоп — он самоценен.
+            result["dasha_current"] = None
+            result["dasha_error"] = str(e)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/dasha")
+def dasha(req: DashaRequest):
+    """Периоды Вимшоттари: маха-даши и вложенные антар-даши.
+
+    Отдельно от `/api/horoscope`, потому что полное дерево тяжёлое, а нужно
+    не всегда. `levels`: 1 — только маха-даши, 2 — с антар-дашами, глубже —
+    пратьянтар и далее.
+    """
+    try:
+        h = calculate(
+            year=req.year, month=req.month, day=req.day,
+            hour=req.hour, minute=req.minute,
+            tz=req.tz, lat=req.lat, lon=req.lon,
+        )
+        birth = datetime(req.year, req.month, req.day, req.hour, req.minute)
+        return calc_vimshottari(h["moon_sid"], birth, levels=req.levels)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -12,7 +12,8 @@
 // Лучше пустое место, чем правдоподобная выдумка (docs/SERVICE-IA.md §9).
 import {
   useJyotish, dignity, isGandantaNakshatra,
-  loadNakshatras, loadDisclaimers,
+  nakshatraFromLongitude, NAK_NAMES,
+  loadNakshatras, loadDisclaimers, loadPlanetInNakshatra,
 } from '~/composables/useJyotish'
 import type { HoroPlanet } from '~/composables/useBirthProfile'
 
@@ -248,6 +249,153 @@ const planetRows = computed(() => {
 })
 
 const hiddenPlanets = computed(() => Math.max(0, planetRows.value.length - SIMPLE_PLANETS))
+
+// ─── Планеты в накшатрах (content/planet_in_nakshatra.json, 293 КБ) ─────────
+// 27 × 9 = 243 трактовки «планета в накшатре»: синтез природы планеты с шакти,
+// деватой и природой стоянки (docs/NAKSHATRA-ARTICLE-MODEL.md §19).
+// Файл тяжёлый, поэтому: (1) только динамический import через loadPlanetInNakshatra,
+// (2) запрос уходит не при открытии страницы, а когда секция доезжает до экрана.
+
+interface PlanetInNak {
+  planet: string
+  relation: string
+  core: string
+  notes: string[]
+  special: string | null
+}
+
+const pinData = ref<Record<string, PlanetInNak[]> | null>(null)
+const pinLoading = ref(false)
+const pinFailed = ref(false)
+/** Маячок перед секцией: по его появлению во вьюпорте стартует загрузка. */
+const pinAnchor = ref<HTMLElement | null>(null)
+
+async function loadPin() {
+  if (pinData.value || pinLoading.value) return
+  pinLoading.value = true
+  pinFailed.value = false
+  try {
+    pinData.value = await loadPlanetInNakshatra()
+  } catch {
+    pinFailed.value = true
+  } finally {
+    pinLoading.value = false
+  }
+}
+
+// Триггер считаем по геометрии, а не через IntersectionObserver: секция может
+// оказаться в нулевом/скрытом вьюпорте (превью, фоновая вкладка), и тогда IO
+// не сработает вовсе — пользователь остался бы с пустой секцией навсегда.
+let pinCheckedAt = 0
+
+function pinMaybeLoad() {
+  if (pinData.value || pinLoading.value) { pinStopWatching(); return }
+  const el = pinAnchor.value
+  if (!el) return
+  const top = el.getBoundingClientRect().top
+  const limit = (window.innerHeight || document.documentElement.clientHeight || 0) + 300
+  if (top > limit) return
+  pinStopWatching()
+  loadPin()
+}
+
+// Троттлим по времени, а не через requestAnimationFrame: в фоновой вкладке rAF
+// не вызывается, и загрузка молча не состоялась бы.
+function pinOnScroll() {
+  const now = Date.now()
+  if (now - pinCheckedAt < 120) return
+  pinCheckedAt = now
+  pinMaybeLoad()
+}
+
+function pinStopWatching() {
+  if (!import.meta.client) return
+  window.removeEventListener('scroll', pinOnScroll)
+  window.removeEventListener('resize', pinOnScroll)
+}
+
+watch(pinAnchor, (el) => {
+  if (!import.meta.client) return
+  pinStopWatching()
+  if (!el || pinData.value) return
+  window.addEventListener('scroll', pinOnScroll, { passive: true })
+  window.addEventListener('resize', pinOnScroll, { passive: true })
+  // Секция стоит внизу длинной страницы: при открытии она почти всегда за
+  // экраном и 293 КБ не запрашиваются. Но на очень высоком экране она может
+  // быть видна сразу — тогда грузим честно сразу.
+  nextTick(pinMaybeLoad)
+})
+
+onBeforeUnmount(pinStopWatching)
+
+/** Отношение планеты к управителю накшатры → тон чипа и короткая подпись. */
+function relationChip(relation: string): { variant: 'good' | 'bad' | 'neutral'; label: string } {
+  const r = (relation || '').toLowerCase()
+  if (r.startsWith('своя')) return { variant: 'good', label: 'своя накшатра' }
+  if (r.startsWith('дружествен')) return { variant: 'good', label: 'дружественный управитель' }
+  if (r.startsWith('напряж')) return { variant: 'bad', label: 'напряжённый управитель' }
+  return { variant: 'neutral', label: 'нейтральный управитель' }
+}
+
+// Сводим написания к общему виду: «Уттарашадха» (API) ↔ «Уттара Ашадха» (content),
+// «Пурвабхадра» ↔ «Пурва Бхадрапада» — отсюда схлопывание пробелов и удвоений
+// плюс сравнение по префиксу ниже.
+const normNak = (s: string) => s
+  .toLowerCase().replace(/ё/g, 'е').replace(/[^а-я]/g, '')
+  .replace(/(.)\1+/g, '$1')
+
+/** Ключ накшатры в справочнике (1..27) для планеты из ответа API.
+ * Считаем из сидерической долготы — это точно и не зависит от того, как API
+ * пишет имя («Пурвабхадра» против «Пурва Бхадрапада» в content/). Имя — только
+ * запасной путь, если долготы вдруг не окажется. */
+function nakNoOf(p: HoroPlanet): number | null {
+  if (Number.isFinite(p.sid)) return nakshatraFromLongitude(p.sid).no
+  const a = normNak(p.nakshatra_ru ?? '')
+  if (!a) return null
+  const i = NAK_NAMES.findIndex((n) => {
+    const b = normNak(n)
+    return b === a || b.startsWith(a) || a.startsWith(b)
+  })
+  return i >= 0 ? i + 1 : null
+}
+
+/** В простом режиме показываем только светила: Солнце и Луна — то, что человек
+ * про себя действительно читает. Остальные семь — проф-глубина («Астролог»),
+ * как и задумано в модели статьи накшатры. */
+const PIN_SIMPLE = new Set(['Солнце', 'Луна'])
+
+const pinRows = computed(() => {
+  const h = horoscope.value
+  const data = pinData.value
+  if (!h || !data) return []
+  const out: Array<{
+    key: string; name: string; glyph: string; position: string
+    chip: { variant: 'good' | 'bad' | 'neutral'; label: string }
+    core: string; notes: string[]; special: string; pro: boolean
+  }> = []
+  for (const p of h.planets) {
+    if (!p.available) continue
+    const no = nakNoOf(p)
+    if (!no) continue
+    const rec = (data[String(no)] ?? []).find((r) => r.planet === p.name)
+    // Трактовки для пары «планета × накшатра» нет — строку просто не рисуем.
+    if (!rec?.core) continue
+    out.push({
+      key: p.name,
+      name: p.name,
+      glyph: PLANET_GLYPH[p.name] ?? p.abbr ?? '',
+      position: `${NAK_NAMES[no - 1]} · ${ORDINAL_F[p.pada] ?? p.pada} пада`,
+      chip: relationChip(rec.relation),
+      core: rec.core,
+      notes: Array.isArray(rec.notes) ? rec.notes : [],
+      special: rec.special ?? '',
+      pro: !PIN_SIMPLE.has(p.name),
+    })
+  }
+  return out
+})
+
+const pinHidden = computed(() => pinRows.value.filter((r) => r.pro).length)
 
 // ─── Дома (только при достоверной Лагне) ────────────────────────────────────
 
@@ -497,6 +645,76 @@ onMounted(async () => {
         </UiCard>
         <UiDisclaimer v-if="disc.placements">{{ disc.placements }}</UiDisclaimer>
 
+        <!-- ─── Планеты в накшатрах (243 трактовки, ленивые 293 КБ) ──────── -->
+        <div ref="pinAnchor" class="pin-anchor" aria-hidden="true" />
+        <UiSectionHead title="Планеты в накшатрах" />
+        <UiCard>
+          <p class="hint" style="margin:0 0 16px">
+            Не «планета в знаке», а планета в той стоянке, где она реально стоит:
+            её природа проходит через шакти, девату и природу накшатры, а тон задаёт
+            отношение к управителю стоянки.
+          </p>
+
+          <template v-if="pinRows.length">
+            <UiProRow
+              v-for="row in pinRows"
+              :key="row.key"
+              :name="row.name"
+              :glyph="row.glyph"
+              :pro="row.pro"
+            >
+              <template #position>
+                {{ row.position }}
+                <UiChip :variant="row.chip.variant" class="pin-chip">{{ row.chip.label }}</UiChip>
+              </template>
+
+              {{ row.core }}
+
+              <UiProOnly v-if="row.special || row.notes.length">
+                <p v-if="row.special" class="pin-special">★ {{ row.special }}</p>
+                <ul v-if="row.notes.length" class="pin-notes">
+                  <li v-for="(n, i) in row.notes" :key="i">{{ n }}</li>
+                </ul>
+              </UiProOnly>
+
+              <p v-if="row.key === 'Луна' && moonUncertain" class="hint" style="margin:8px 0 0">
+                Накшатра Луны под вопросом (см. выше) — вместе с ней под вопросом
+                и эта трактовка.
+              </p>
+            </UiProRow>
+
+            <p v-if="pinHidden" class="hint hint--simple" style="margin:14px 0 0">
+              Ещё {{ pinHidden }} планет в своих накшатрах — в режиме «Астролог».
+              Там же — отношение к управителю подробно и особые точки.
+            </p>
+          </template>
+
+          <template v-else>
+            <p class="hint" style="margin:0">
+              <template v-if="pinLoading">Загружаем трактовки «планета в накшатре»…</template>
+              <template v-else-if="pinFailed">Не удалось загрузить справочник трактовок.</template>
+              <template v-else-if="pinData">
+                Для положений планет в этой карте трактовок в справочнике нет.
+              </template>
+              <template v-else>
+                Справочник трактовок (293 КБ) подгружается отдельно — он не нужен
+                остальной странице.
+              </template>
+            </p>
+            <p v-if="!pinLoading && !pinData" style="margin:14px 0 0">
+              <UiButton variant="ghost" @click="loadPin()">
+                {{ pinFailed ? 'Повторить' : 'Показать трактовки' }}
+              </UiButton>
+            </p>
+          </template>
+        </UiCard>
+        <UiDisclaimer>
+          Трактовки «планета в накшатре» — синтез (природа планеты × шакти, девата
+          и природа накшатры × отношение к управителю), а не цитата из трактата:
+          рабочая версия для сверки с учителем. Особые точки экзальтации и падения —
+          классика. Полная картина складывается из всей карты, а не из одной строки.
+        </UiDisclaimer>
+
         <!-- ─── Дома (проф-глубина, только при достоверной Лагне) ────────── -->
         <UiProOnly v-if="lagnaReliable">
           <UiSectionHead title="Карта домов" flag="Астролог" />
@@ -553,6 +771,26 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Маячок ленивой загрузки секции «Планеты в накшатрах»: должен иметь ненулевую
+   высоту, иначе IntersectionObserver в части браузеров его не замечает. */
+.pin-anchor { height: 1px; margin-bottom: -1px; }
+
+.pin-chip { margin-left: 6px; vertical-align: middle; }
+.pin-special {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--gold-ink, var(--muted));
+}
+.pin-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.pin-notes li + li { margin-top: 4px; }
+
 /* Подсказка «…в режиме Астролог» нужна только пользовательскому режиму —
    в прототипе это делал me-more-hint через JS. */
 .vd-app.is-pro .hint--simple { display: none; }
