@@ -1,9 +1,33 @@
 #!/usr/bin/env python3
-"""Extract embedded JS data constants from nakshatry HTML into JSON files."""
+"""Пересборка контентной базы: вытаскивает JS-константы из исходного HTML в JSON.
+
+Запуск из корня репозитория:
+    .venv/bin/python content/extract_data.py
+
+Пути считаются от самого файла, поэтому скрипт работает из любого клона и
+не зависит от каталогов на конкретной машине. Исходник и выход можно
+переопределить аргументами: extract_data.py [SRC] [OUT].
+
+ВАЖНО, что скрипт покрывает не всё. Он вытаскивает 28 JSON — те, что лежали
+в HTML готовыми JS-константами. Ещё пять файлов собраны разбором вёрстки и
+стилей вручную, скрипт их НЕ перезапишет и НЕ восстановит:
+    chart_geometry.json · design_tokens.json · disclaimers.json
+    filter_defs.json    · ui_texts.json
+История того извлечения — в docs/content-base/EXTRACTION-PLAN.md.
+"""
 import json, re, os, sys
 
-SRC = "/Users/macbook_pro/WebstormProjects/Astro-Oleg/nakshatry_polnyy (14).html"
-OUT = "/Users/macbook_pro/WebstormProjects/Astro-Oleg/data"
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
+
+# Исходник живёт в репозитории рядом с прототипами — из него собран весь content/.
+SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "prototype", "nakshatry_polnyy.html")
+OUT = sys.argv[2] if len(sys.argv) > 2 else HERE
+
+if not os.path.exists(SRC):
+    sys.exit(f"Исходный HTML не найден: {SRC}\n"
+             f"Укажи путь аргументом: python content/extract_data.py <файл.html>")
+
 html = open(SRC, encoding="utf-8").read()
 
 def extract_literal(decl_regex):
