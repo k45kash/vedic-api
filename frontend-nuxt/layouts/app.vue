@@ -15,7 +15,7 @@ const { isDark, toggleTheme } = useTheme()
 const { isPro, setAudience } = useAudience()
 const auth = useAuth()
 
-// Пункты сайдбара. Первые четыре — рабочие маршруты, остальные пока задизейблены
+// Пункты сайдбара. Первые пять — рабочие маршруты, остальные пока задизейблены
 // с меткой «скоро», как в прототипе.
 // Тип объявлен явно, а не выведен из `as const`: иначе объединение вариантов
 // «с to» и «с soon» не имеет общего поля `to`, и шаблонная проверка `v-if="item.to"`
@@ -32,7 +32,7 @@ const navItems: readonly NavItem[] = [
   { label: 'Карта', icon: 'chart', to: '/chart' },
   { label: 'Сегодня', icon: 'sun', to: '/today' },
   { label: 'Подобрать дату', icon: 'calendar', to: '/pick-date' },
-  { label: 'Совместимость', icon: 'heart', soon: true },
+  { label: 'Совместимость', icon: 'heart', to: '/compat' },
   { label: 'Практики', icon: 'lotus', soon: true },
   { label: 'Справочник', icon: 'book', soon: true },
   { label: 'Настройки', icon: 'settings', soon: true },

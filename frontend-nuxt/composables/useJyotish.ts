@@ -220,3 +220,23 @@ export async function muhurtaTexts() {
   const m = await import('~calc/muhurta')
   return m.MUHURTA_TEXTS
 }
+
+// ─── Экран «Совместимость»: полный ашта-кута на 36 баллов ───────────────────
+// Обёртка по образцу ashtaKutaPartial выше: тот же чанк kuta.ts (nakshatras.json
+// 279 КБ), поэтому только динамическим import(). Частичный расчёт на 21 балл
+// оставлен как был — он работает там, где известна лишь накшатра Луны.
+
+export type {
+  KutaKey, KutaPerson, KutaVerdictLevel, AshtaKutaFullResult,
+} from '~calc/kuta'
+
+/** Полный ашта-кута (36 баллов). Нужен знак Луны обоих; градус — по желанию,
+ *  без него Вашья в Стрельце и Козероге считается приблизительно.
+ *  Порядок аргументов важен: Варна и Вашья несимметричны. */
+export async function ashtaKutaFull(
+  bride: import('~calc/kuta').KutaPerson,
+  groom: import('~calc/kuta').KutaPerson,
+): Promise<import('~calc/kuta').AshtaKutaFullResult> {
+  const m = await import('~calc/kuta')
+  return m.ashtaKutaFull(bride, groom)
+}

@@ -49,6 +49,7 @@ export default defineNuxtConfig({
         '/chart',
         '/today',
         '/pick-date',
+        '/compat',
       ],
     },
   },

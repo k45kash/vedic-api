@@ -723,6 +723,109 @@ html:has(> body.vd-scope){height:100%}
 .vd-app .sources__note--foot{margin-top:14px}
 .vd-app .sources__legend{display:flex;align-items:baseline;gap:4px;margin-top:9px}
 
+/* ===================== ЭКРАН «СОВМЕСТИМОСТЬ» ===================== */
+/* Ашта-кута пары (pages/compat.vue, components/compat/*).
+   Тон здесь важнее украшений: совместимость подаётся как частичный ориентир,
+   а не как приговор (docs/HANDOFF.md §5.2). Поэтому — никакого красного на
+   баллах и никаких «процентов совместимости»: шкала куты залита нейтральным
+   акцентом, а доша помечена золотом «обратите внимание», а не тревогой.
+   Новых цветов не вводим, всё из тех же токенов. */
+
+/* Карточки страницы идут подряд, без сеток — дышать им нужно самим. */
+.vd-app .cp-page > .card + .card{margin-top:16px}
+.vd-app .cp-page > .sechead + .card{margin-top:0}
+
+.vd-app .cp-lead{margin:0;font-size:14px;line-height:1.6;color:var(--body)}
+.vd-app .cp-lead + .cp-lead{margin-top:10px}
+.vd-app .cp-lead--term{font-size:13.5px;color:var(--muted)}
+.vd-app .cp-lead--term b{color:var(--ink);font-weight:600}
+
+.vd-app .cp-msg{margin:0;font-size:14px;line-height:1.6;color:var(--body)}
+.vd-app .cp-msg + .cp-msg{margin-top:10px}
+.vd-app .cp-msg--muted{font-size:13px;color:var(--muted)}
+.vd-app .cp-note{margin:12px 0 0}
+.vd-app .cp-fallback-hint{margin:12px 0 0}
+
+/* Пара «вы + партнёр»: две колонки, на узком — одна (см. .grid-2 в адаптиве). */
+.vd-app .cp-pair{align-items:start}
+
+/* Роли: невеста / жених. Порядок влияет на Варну и Вашью, поэтому строка
+   с расшифровкой стоит прямо под переключателем. */
+.vd-app .cp-roles{margin-bottom:2px}
+.vd-app .cp-roleline{
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--line);
+  display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:var(--body);
+}
+.vd-app .cp-rolekey{color:var(--muted)}
+
+/* Списки «чего расчёт не покрывает» и «где школы расходятся». */
+.vd-app .cp-list{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.vd-app .cp-list li{display:flex;gap:10px;font-size:13.5px;line-height:1.55;color:var(--body)}
+.vd-app .cp-list svg{width:16px;height:16px;flex:none;margin-top:3px;color:var(--muted)}
+
+/* Смягчение бхакут-доши — единственное место с зелёным маркером: это
+   не «хорошо», а «условие отмены, которое расчёт действительно нашёл». */
+.vd-app .cp-relief{display:flex;gap:10px;align-items:flex-start}
+.vd-app .cp-relief svg{width:17px;height:17px;flex:none;margin-top:2px;color:var(--good)}
+
+.vd-app .cp-pins{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.vd-app .cp-pins--row{margin-top:16px}
+
+/* --- карточка одной куты --- */
+.vd-app .cp-kutas{display:flex;flex-direction:column;gap:12px}
+.vd-app .ck{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px 18px 17px;box-shadow:var(--sh-sm);
+}
+/* Доша — золотая рамка «обратите внимание», а не красная «плохо». */
+.vd-app .ck--dosha{border-color:var(--gold-line);background:linear-gradient(180deg,var(--gold-soft),var(--surface) 58%)}
+
+.vd-app .ck__head{display:flex;align-items:baseline;gap:10px}
+.vd-app .ck__no{
+  width:22px;height:22px;flex:none;border-radius:50%;display:inline-grid;place-items:center;
+  background:var(--surface-3);color:var(--muted);font-size:11px;font-weight:600;
+  align-self:center;
+}
+.vd-app .ck--dosha .ck__no{background:var(--gold-soft);color:var(--gold-ink)}
+.vd-app .ck__name{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
+.vd-app .ck__score{margin-left:auto;font-size:13px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.vd-app .ck__score b{font-size:16px;font-weight:600;color:var(--ink)}
+
+.vd-app .ck__bar{
+  display:block;height:5px;margin:11px 0 12px;border-radius:var(--r-pill);
+  background:var(--surface-3);overflow:hidden;
+}
+.vd-app .ck__fill{
+  display:block;height:100%;border-radius:var(--r-pill);background:var(--accent);
+  transition:width var(--d-med) var(--e-out);
+}
+.vd-app .ck--dosha .ck__fill{background:var(--gold)}
+
+.vd-app .ck__note{margin:0;font-size:14px;line-height:1.55;color:var(--ink)}
+.vd-app .ck__what,
+.vd-app .ck__term,
+.vd-app .ck__mech{margin:10px 0 0;font-size:13px;line-height:1.55;color:var(--body)}
+.vd-app .ck__what b,
+.vd-app .ck__term b,
+.vd-app .ck__mech b{color:var(--ink);font-weight:600}
+.vd-app .ck__gap{margin:10px 0 0}
+
+/* Расхождение школ показывается всегда — прятать его под «Астролога» значило бы
+   выдать один вариант за канон. */
+.vd-app .ck__school{
+  display:flex;gap:11px;align-items:flex-start;margin-top:13px;
+  padding:11px 13px;border:1px solid var(--gold-line);border-radius:var(--r-md);
+  background:var(--gold-soft);font-size:12.5px;line-height:1.55;color:var(--body);
+}
+.vd-app .ck__school svg{width:16px;height:16px;flex:none;margin-top:2px;color:var(--gold-ink)}
+.vd-app .ck__school b{color:var(--gold-ink);font-weight:600}
+.vd-app .ck__pin{margin-top:12px}
+
+@media (max-width:640px){
+  .vd-app .ck__head{flex-wrap:wrap}
+  .vd-app .ck__score{margin-left:0;width:100%;order:5}
+}
+
 /* ===================== АДАПТИВ ===================== */
 @media (max-width:1400px){
   /* локация в шапке уходит первой — она самая широкая и наименее нужная */
