@@ -27,7 +27,37 @@ function tithiMatches(entry: string, tn: number, paksha: Paksha): boolean {
   if (!Number.isNaN(num)) return num === tn
   if (s.includes('амавас')) return tn === 15 && paksha === 'krishna'
   if (s.includes('пурним')) return tn === 15 && paksha === 'shukla'
+
+  // Категория титхи («рикта», «Нанда-титхи 1,6,11 …»). Состав категорий не
+  // выдумываем и не держим таблицей в коде — берём поле `cat` из tithi.json.
+  const cat = tithiCategory(s)
+  if (cat) return cat.has(tn)
+
+  // Запись может перечислять номера прямо в тексте — тогда читаем их все.
+  const nums = s.match(/\d+/g)
+  if (nums) return nums.some((n) => Number(n) === tn)
+
   return false
+}
+
+/** Номера титх категории («Нанда», «Рикта», …) по полю `cat` из tithi.json.
+ * Собирается один раз при первом обращении. */
+let tithiCats: Map<string, Set<number>> | null = null
+function tithiCategory(entry: string): Set<number> | null {
+  if (!tithiCats) {
+    tithiCats = new Map()
+    for (const t of ((TITHI as any)?.tithis ?? []) as Array<{ n?: number; cat?: string }>) {
+      const key = String(t?.cat ?? '').trim().toLowerCase()
+      const n = Number(t?.n)
+      if (!key || !Number.isFinite(n)) continue
+      if (!tithiCats.has(key)) tithiCats.set(key, new Set())
+      tithiCats.get(key)!.add(n)
+    }
+  }
+  for (const [key, nums] of tithiCats) {
+    if (entry.includes(key)) return nums
+  }
+  return null
 }
 
 /** Совпадает ли запись справочника накшатр с накшатрой дня.
