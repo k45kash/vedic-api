@@ -19,7 +19,7 @@ from datetime import datetime
 
 import swisseph as swe
 
-from utils import dt_to_jd, jd_to_local, dms, dms_sign, NAKSHATRAS
+from utils import dt_to_jd, jd_to_local, dms, dms_sign, NAKSHATRAS, nakshatra_pada
 
 # ephe/ лежит рядом со скриптом; SE_EPHE_PATH переопределяет если нужно
 EPHE_PATH = os.environ.get(
@@ -242,10 +242,15 @@ def get_planet_positions(jd: float, aya: float) -> list:
 # ═══════════════════════════════════════════════════════════
 
 def get_nk(sid: float) -> dict:
-    idx  = int(sid / NK_SIZE) % 27
-    pada = int((sid % NK_SIZE) / (NK_SIZE / 4)) + 1
-    deg  = sid % NK_SIZE
-    n    = NAKSHATRAS[idx]
+    # Накшатра и пада считаются одним сквозным номером пады — см. пояснение
+    # в `utils.global_pada`. Два независимых деления расходились ровно на
+    # границах пад (70 из 108), а таблицы вроде круга 108 пад и календаря
+    # входов Луны попадают в эти границы по построению.
+    idx, pada = nakshatra_pada(sid)
+    deg = sid - idx * NK_SIZE
+    if deg < 0:                      # значение вплотную к границе снизу
+        deg = 0.0
+    n = NAKSHATRAS[idx]
     return {**n, "pada": pada, "degrees_in_nakshatra": round(deg, 6)}
 
 # ═══════════════════════════════════════════════════════════

@@ -10,7 +10,7 @@ FastAPI сервер для ведической астрологии.
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -22,6 +22,7 @@ from Panchangam import calc_panchang
 from nakshatra_calculator import calculate
 from nakshatra_calendar import calc_calendar
 from sade_sati import calc_sade_sati
+from varga import calc_vargas, navamsa_chart, pada_wheel
 from vimshottari import calc_vimshottari
 
 from auth.db import init_db
@@ -90,6 +91,19 @@ class DashaRequest(BaseModel):
     lon: float = 0.0
     # 1 — маха-даши, 2 — с антар-дашами, 3+ — пратьянтар и глубже.
     levels: int = 2
+
+
+class VargaRequest(BaseModel):
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    tz: float
+    lat: float
+    lon: float
+    # Какие вибхаги считать. None — все поддерживаемые: 1, 2, 3, 7, 9, 10, 12.
+    vargas: Optional[List[int]] = None
 
 
 class CalendarRequest(BaseModel):
@@ -227,9 +241,76 @@ def horoscope(req: HoroscopeRequest):
             # Даши не должны ронять весь гороскоп — он самоценен.
             result["dasha_current"] = None
             result["dasha_error"] = str(e)
+
+        # Навамша (D9) — единственная варга, которая едет вместе с гороскопом.
+        # Причина: без неё фронт не может ни раскрасить круг 108 пад, ни
+        # показать варготтаму, а варготтама — свойство планеты В ЭТОЙ карте,
+        # запрашивать его вторым походом в сеть незачем.
+        # Цена измерена: 6719 → 8028 Б, то есть +1309 Б (+19%). Блок урезан
+        # до невыводимого (см. `varga.navamsa_chart`) — полный весил 3,8 КБ.
+        # Остальные вибхаги живут в /api/varga: там весь набор — 19 КБ,
+        # втрое больше самого гороскопа, и нужен он точечно.
+        try:
+            result["navamsa"] = navamsa_chart(
+                result["planets"], result["lagna"]["sid_asc"]
+            )
+        except Exception as e:
+            # Как и с дашами: варга не должна ронять гороскоп.
+            result["navamsa"] = None
+            result["navamsa_error"] = str(e)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/varga")
+def varga(req: VargaRequest):
+    """Дивизиональные карты (варги): D1, D2 хора, D3, D7, D9, D10, D12.
+
+    Отдельно от `/api/horoscope`: весь набор — около 19 КБ, втрое больше
+    самого гороскопа, а нужен он точечно, на экране «варги». Навамша (D9)
+    при этом сознательно дублируется в гороскопе — она нужна почти везде
+    (круг 108 пад, варготтама), и второй запрос ради неё был бы лишним.
+
+    `vargas` — список номеров; по умолчанию считаются все поддерживаемые.
+    """
+    try:
+        h = calculate(
+            year=req.year, month=req.month, day=req.day,
+            hour=req.hour, minute=req.minute,
+            tz=req.tz, lat=req.lat, lon=req.lon,
+        )
+        result = calc_vargas(h["planets"], h["lagna"]["sid_asc"], req.vargas)
+        # Долготы, от которых посчитаны все варги. Знаки D1 уже лежат в
+        # charts["D1"], поэтому здесь только то, чего там нет, — градус.
+        # Без него варгу нельзя перепроверить руками, а это ровно то, чем
+        # астролог занимается с дивизиональными картами.
+        result["positions"] = {
+            "lagna": {"sid": round(h["lagna"]["sid_asc"], 6),
+                      "deg_in_sign_dms": h["lagna"]["deg_in_sign_dms"]},
+            "planets": [
+                {"name": p["name"], "sid": p["sid"],
+                 "deg_in_sign_dms": p["deg_in_sign_dms"]}
+                for p in h["planets"]
+            ],
+        }
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/varga/pada-wheel")
+def varga_pada_wheel():
+    """Таблица 108 пад → знак навамши. От даты и места не зависит.
+
+    Разбиение самого зодиака: 27 накшатр × 4 пады = 108 = 12 знаков × 9
+    навамш, границы совпадают точно. Нужна кругу пад из
+    `content/chart_geometry.json` → `pada_wheel`, в том числе флагу
+    варготтамы у секторов.
+    """
+    return {"padas": pada_wheel(), "vargottama_count": 12}
 
 
 @app.post("/api/dasha")

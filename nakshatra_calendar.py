@@ -20,7 +20,7 @@ from datetime import datetime, date
 
 import swisseph as swe
 
-from utils import dt_to_jd, jd_to_local, _bisect, dms, NAKSHATRAS
+from utils import dt_to_jd, jd_to_local, _bisect, dms, NAKSHATRAS, global_pada
 
 EPHE_PATH = os.environ.get(
     "SE_EPHE_PATH",
@@ -79,11 +79,11 @@ def moon_sid(jd: float, topo: bool = False, lat: float = 0.0, lon: float = 0.0) 
 
 
 def nk_idx(jd: float, lat: float = 0.0, lon: float = 0.0) -> int:
-    return int(moon_sid(jd, lat=lat, lon=lon) / NK_SIZE) % 27
+    return global_pada(moon_sid(jd, lat=lat, lon=lon)) // 4
 
 
 def pada_idx(jd: float, lat: float = 0.0, lon: float = 0.0) -> int:
-    return int((moon_sid(jd, lat=lat, lon=lon) % NK_SIZE) / PADA_SIZE)
+    return global_pada(moon_sid(jd, lat=lat, lon=lon)) % 4
 
 
 def boundary_flag(moon_lon: float, moon_speed_dpd: float = 13.2) -> str:
