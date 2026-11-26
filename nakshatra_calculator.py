@@ -18,6 +18,7 @@ import os
 from datetime import datetime
 
 import swisseph as swe
+from position_mode import longitude_flags
 
 from utils import dt_to_jd, jd_to_local, dms, dms_sign, NAKSHATRAS, nakshatra_pada
 
@@ -151,7 +152,7 @@ def get_aya(jd: float, mode=None) -> float:
 # ═══════════════════════════════════════════════════════════
 
 def moon_trop(jd: float, topo: bool = False, lat: float = 0, lon: float = 0) -> float:
-    fl = swe.FLG_SWIEPH
+    fl = longitude_flags()
     if topo:
         swe.set_topo(lon, lat, 0)
         fl |= swe.FLG_TOPOCTR
@@ -182,7 +183,7 @@ def _planet_trop_swe(jd: float, planet_idx: int) -> tuple:
     swe_ids = [swe.SUN, swe.MOON, swe.MARS, swe.MERCURY,
                swe.JUPITER, swe.VENUS, swe.SATURN,
                swe.TRUE_NODE, swe.TRUE_NODE]
-    pos, _ = swe.calc_ut(jd, swe_ids[planet_idx], swe.FLG_SWIEPH | swe.FLG_SPEED)
+    pos, _ = swe.calc_ut(jd, swe_ids[planet_idx], longitude_flags() | swe.FLG_SPEED)
     lon, speed = pos[0], pos[3]
     if planet_idx == 8:   # Кету = Раху + 180°
         lon = (lon + 180.0) % 360
@@ -306,6 +307,8 @@ def get_lagna(jd: float, lat: float, lon: float, aya: float) -> dict:
                         "sign": sg["name"], "sign_ru": sg["ru"],
                         "lord": sg["lord"], "meaning": HOUSE_MEANINGS[i+1]})
     return {
+        "nakshatra_ru":    get_nk(sid)["ru"],
+        "pada":            get_nk(sid)["pada"],
         "trop_asc":        round(trop, 6),
         "sid_asc":         round(sid, 6),
         "asc_dms":         dms(sid),

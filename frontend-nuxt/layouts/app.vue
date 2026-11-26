@@ -31,6 +31,7 @@ const navItems: readonly NavItem[] = [
   { label: 'Обо мне', icon: 'user', to: '/me' },
   { label: 'Карта', icon: 'chart', to: '/chart' },
   { label: 'Сегодня', icon: 'sun', to: '/today' },
+  { label: 'Панчанга', icon: 'calendar', to: '/panchang-day' },
   { label: 'Подобрать дату', icon: 'calendar', to: '/pick-date' },
   { label: 'Совместимость', icon: 'heart', to: '/compat' },
   { label: 'Практики', icon: 'lotus', soon: true },

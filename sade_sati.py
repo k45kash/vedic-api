@@ -23,6 +23,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional
 
 import swisseph as swe
+from position_mode import longitude_flags
 
 from utils import dt_to_jd, jd_to_local, _bisect, dms, dms_sign, NAKSHATRAS
 
@@ -85,7 +86,7 @@ def get_aya(jd: float) -> float:
 def saturn_sid(jd: float) -> float:
     """Сидерическая долгота Сатурна (Лахири)."""
     aya = get_aya(jd)
-    pos, _ = swe.calc_ut(jd, swe.SATURN, swe.FLG_SWIEPH)
+    pos, _ = swe.calc_ut(jd, swe.SATURN, longitude_flags())
     return (pos[0] - aya) % 360
 
 
@@ -97,7 +98,7 @@ def saturn_sign(jd: float) -> int:
 def _moon_sid_at(jd: float, aya: float, topo: bool,
                  lat: float, lon: float) -> float:
     """Сидерическая долгота Луны: гео- или топоцентрическая."""
-    fl = swe.FLG_SWIEPH
+    fl = longitude_flags()
     if topo:
         swe.set_topo(lon, lat, 0)
         fl |= swe.FLG_TOPOCTR

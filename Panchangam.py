@@ -16,6 +16,7 @@ import os
 from datetime import datetime, timedelta, date
 
 import swisseph as swe
+from position_mode import longitude_flags
 
 from utils import dt_to_jd, jd_to_local, _bisect
 
@@ -226,25 +227,25 @@ def fmt_dur(hours: float) -> str:
 
 def sun_lon(jd: float) -> float:
     """Тропическая долгота Солнца."""
-    pos, _ = swe.calc_ut(jd, swe.SUN, swe.FLG_SWIEPH)
+    pos, _ = swe.calc_ut(jd, swe.SUN, longitude_flags())
     return pos[0]
 
 
 def moon_lon(jd: float) -> float:
     """Тропическая долгота Луны."""
-    pos, _ = swe.calc_ut(jd, swe.MOON, swe.FLG_SWIEPH)
+    pos, _ = swe.calc_ut(jd, swe.MOON, longitude_flags())
     return pos[0]
 
 
 def sun_lon_sid(jd: float) -> float:
     """Сидерическая (нираяна, Лахири) долгота Солнца."""
-    pos, _ = swe.calc_ut(jd, swe.SUN, swe.FLG_SWIEPH | swe.FLG_SIDEREAL)
+    pos, _ = swe.calc_ut(jd, swe.SUN, longitude_flags() | swe.FLG_SIDEREAL)
     return pos[0]
 
 
 def moon_lon_sid(jd: float) -> float:
     """Сидерическая (нираяна, Лахири) долгота Луны."""
-    pos, _ = swe.calc_ut(jd, swe.MOON, swe.FLG_SWIEPH | swe.FLG_SIDEREAL)
+    pos, _ = swe.calc_ut(jd, swe.MOON, longitude_flags() | swe.FLG_SIDEREAL)
     return pos[0]
 
 

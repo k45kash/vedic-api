@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { PositionMode } from '~/composables/useBirthForm'
 useHead({ title: 'Панчанг — Vedic' })
 
 const api = useApi()
 
 const form = reactive({
+  position_mode: 'apparent' as PositionMode,
   date: new Date().toISOString().slice(0, 10),
   lat: 45.0428,
   lon: 41.9734,
@@ -229,6 +231,7 @@ async function submit() {
     // Запрашиваем вчера/сегодня/завтра — day[1] это выбранный день,
     // соседние нужны для титхи/хор, переходящих через полночь.
     result.value = await api.post('/api/panchang', {
+      position_mode: form.position_mode,
       date_start: prevDay(form.date),
       date_end:   nextDay(form.date),
       tz:         form.tz,
@@ -278,6 +281,7 @@ async function submit() {
           <input type="number" v-model.number="form.tz" step="0.5" required />
         </div>
       </div>
+      <PositionModeField v-model="form.position_mode" :disabled="loading" />
       <button type="submit" class="primary" :disabled="loading">Рассчитать</button>
     </form>
 

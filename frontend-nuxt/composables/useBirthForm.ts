@@ -1,11 +1,14 @@
 // Shared reactive state for a "birth" form used across pages.
 // Defaults: Stavropol 17 May 1990 14:30 UTC+3.
+export type PositionMode = 'apparent' | 'geometric'
+
 export interface BirthForm {
   date: string   // yyyy-MM-dd
   time: string   // HH:mm
   lat: number
   lon: number
   tz: number
+  position_mode: PositionMode
   city: string
 }
 
@@ -17,6 +20,7 @@ export function useBirthForm(overrides: Partial<BirthForm> = {}) {
     lon: 41.9734,
     tz: 3,
     city: 'Ставрополь',
+    position_mode: 'apparent',
     ...overrides,
   })
 }
@@ -26,6 +30,7 @@ export function birthToPayload(form: BirthForm) {
   const [y, m, d]   = form.date.split('-').map(Number)
   const [hh, mm]    = form.time.split(':').map(Number)
   return {
+    position_mode: form.position_mode,
     year:   y,
     month:  m,
     day:    d,

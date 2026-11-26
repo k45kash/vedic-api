@@ -13,7 +13,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import pytz
 from timezonefinder import TimezoneFinder
@@ -25,6 +25,8 @@ from sade_sati import calc_sade_sati
 from varga import calc_vargas, navamsa_chart, pada_wheel
 from vimshottari import calc_vimshottari
 
+from position_mode import PositionMode, calculate_in_mode
+from panchang_day import day_timeline
 from auth.db import init_db
 from auth.router import router as auth_router
 
@@ -60,7 +62,11 @@ app.include_router(auth_router)
 
 # ─── Модели запросов ────────────────────────────────────────────────────────
 
-class PanchangRequest(BaseModel):
+class CalculationRequest(BaseModel):
+    position_mode: PositionMode = "apparent"
+
+
+class PanchangRequest(CalculationRequest):
     date_start: date
     date_end: date
     tz: float
@@ -69,7 +75,7 @@ class PanchangRequest(BaseModel):
     elev_m: float = 0.0
 
 
-class HoroscopeRequest(BaseModel):
+class HoroscopeRequest(CalculationRequest):
     year: int
     month: int
     day: int
@@ -80,7 +86,7 @@ class HoroscopeRequest(BaseModel):
     lon: float
 
 
-class DashaRequest(BaseModel):
+class DashaRequest(CalculationRequest):
     year: int
     month: int
     day: int
@@ -93,7 +99,7 @@ class DashaRequest(BaseModel):
     levels: int = 2
 
 
-class VargaRequest(BaseModel):
+class VargaRequest(CalculationRequest):
     year: int
     month: int
     day: int
@@ -106,7 +112,7 @@ class VargaRequest(BaseModel):
     vargas: Optional[List[int]] = None
 
 
-class CalendarRequest(BaseModel):
+class CalendarRequest(CalculationRequest):
     date_start: date
     date_end: date
     tz: float
@@ -116,7 +122,7 @@ class CalendarRequest(BaseModel):
     prec_sec: float = 1.0
 
 
-class SadeSatiRequest(BaseModel):
+class SadeSatiRequest(CalculationRequest):
     year: int
     month: int
     day: int
@@ -197,11 +203,25 @@ def debug():
     }
 
 
+class DayTimelineRequest(CalculationRequest):
+    day: date
+    tz: float = Field(ge=-14, le=14)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+@app.post("/api/panchang/day")
+def panchang_day(req: DayTimelineRequest):
+    result = calculate_in_mode(req.position_mode, day_timeline, req.day, req.lat, req.lon, req.tz)
+    return {**result, "position_mode": req.position_mode}
+
+
 @app.post("/api/panchang")
 def panchang(req: PanchangRequest):
     """Панчанг: титхи, мухурты, хоры за период."""
     try:
-        result = calc_panchang(
+        result = calculate_in_mode(
+            req.position_mode, calc_panchang,
             date_start=req.date_start,
             date_end=req.date_end,
             tz=req.tz,
@@ -209,6 +229,7 @@ def panchang(req: PanchangRequest):
             lon=req.lon,
             elev_m=req.elev_m,
         )
+        result["position_mode"] = req.position_mode
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -218,7 +239,8 @@ def panchang(req: PanchangRequest):
 def horoscope(req: HoroscopeRequest):
     """Гороскоп: накшатра, лагна, планеты по дате и месту рождения."""
     try:
-        result = calculate(
+        result = calculate_in_mode(
+            req.position_mode, calculate,
             year=req.year,
             month=req.month,
             day=req.day,
@@ -228,6 +250,7 @@ def horoscope(req: HoroscopeRequest):
             lat=req.lat,
             lon=req.lon,
         )
+        result["position_mode"] = req.position_mode
         # Текущий период Вимшоттари — только он, без дерева периодов.
         # Полное дерево весит ~40 КБ и нужно далеко не на каждом экране,
         # поэтому оно живёт отдельным /api/dasha, а здесь лежит ровно
@@ -275,7 +298,8 @@ def varga(req: VargaRequest):
     `vargas` — список номеров; по умолчанию считаются все поддерживаемые.
     """
     try:
-        h = calculate(
+        h = calculate_in_mode(
+            req.position_mode, calculate,
             year=req.year, month=req.month, day=req.day,
             hour=req.hour, minute=req.minute,
             tz=req.tz, lat=req.lat, lon=req.lon,
@@ -322,7 +346,8 @@ def dasha(req: DashaRequest):
     пратьянтар и далее.
     """
     try:
-        h = calculate(
+        h = calculate_in_mode(
+            req.position_mode, calculate,
             year=req.year, month=req.month, day=req.day,
             hour=req.hour, minute=req.minute,
             tz=req.tz, lat=req.lat, lon=req.lon,
@@ -337,7 +362,8 @@ def dasha(req: DashaRequest):
 def calendar(req: CalendarRequest):
     """Календарь транзитов Луны по накшатрам за период."""
     try:
-        result = calc_calendar(
+        result = calculate_in_mode(
+            req.position_mode, calc_calendar,
             date_start=req.date_start,
             date_end=req.date_end,
             tz=req.tz,
@@ -358,7 +384,8 @@ def sade_sati(req: SadeSatiRequest):
     По умолчанию ищет периоды от даты рождения до +120 лет.
     """
     try:
-        result = calc_sade_sati(
+        result = calculate_in_mode(
+            req.position_mode, calc_sade_sati,
             year=req.year, month=req.month, day=req.day,
             hour=req.hour, minute=req.minute,
             tz=req.tz, lat=req.lat, lon=req.lon,

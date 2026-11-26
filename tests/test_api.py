@@ -350,3 +350,20 @@ def test_мусор_на_входе_не_даёт_двухсотку(путь, �
     """Некорректный запрос — 4xx или 5xx, но не «успешный» пустой ответ."""
     r = client.post(путь, json=тело)
     assert r.status_code >= 400, r.text
+
+
+def test_position_modes_stavropol(client):
+    birth = dict(year=2026, month=11, day=27, hour=3, minute=0,
+                 tz=3, lat=45.0428, lon=41.9734)
+    for mode, seconds in [("geometric", 46), ("apparent", 14)]:
+        body = dict(birth, position_mode=mode) if mode == "geometric" else birth
+        chart = client.post("/api/horoscope", json=body).json()
+        mercury = next(p for p in chart["planets"] if p["name"] == "Меркурий")
+        assert chart["position_mode"] == mode
+        assert mercury["deg_in_sign"] == pytest.approx(22 + 11/60 + seconds/3600, abs=1/3600)
+    day = dict(date_start="2026-11-27", date_end="2026-11-27", tz=3, lat=45.0428, lon=41.9734)
+    apparent = client.post("/api/panchang", json=day).json()
+    geometric = client.post("/api/panchang", json=dict(day, position_mode="geometric")).json()
+    for row in ("tithis", "karanas", "yogas"):
+        assert apparent[row][0]["dt_end"] != geometric[row][0]["dt_end"]
+    assert apparent["days"] == geometric["days"]

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PositionMode } from '~/composables/useBirthForm'
 useHead({ title: 'Календарь — Vedic' })
 
 const api = useApi()
@@ -25,6 +26,7 @@ const today = new Date()
 const inTwoMonths = new Date(today.getTime() + 60 * 86400 * 1000)
 
 const form = reactive({
+  position_mode: 'apparent' as PositionMode,
   date_start: today.toISOString().slice(0, 10),
   date_end:   inTwoMonths.toISOString().slice(0, 10),
   lat: 45.0428,
@@ -56,6 +58,7 @@ async function submit() {
   openRows.clear()
   try {
     result.value = await api.post<Nakshatra[]>('/api/calendar', {
+      position_mode: form.position_mode,
       date_start: form.date_start,
       date_end:   form.date_end,
       tz:         form.tz,
@@ -109,6 +112,7 @@ async function submit() {
           <input type="number" v-model.number="form.tz" step="0.5" required />
         </div>
       </div>
+      <PositionModeField v-model="form.position_mode" :disabled="loading" />
       <button type="submit" class="primary" :disabled="loading">Рассчитать</button>
     </form>
 

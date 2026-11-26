@@ -5,7 +5,7 @@ const { isAuthenticated, email: userEmail } = auth
 
 const nav = [
   { href: '/',          label: 'Накшатра'  },
-  { href: '/panchang',  label: 'Панчанг'   },
+  { href: '/panchang-day', label: 'Панчанга' },
   { href: '/calendar',  label: 'Календарь' },
   { href: '/sade-sati', label: 'Сади Сати' },
 ]

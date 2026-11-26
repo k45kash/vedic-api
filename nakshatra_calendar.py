@@ -19,6 +19,7 @@ import os
 from datetime import datetime, date
 
 import swisseph as swe
+from position_mode import longitude_flags
 
 from utils import dt_to_jd, jd_to_local, _bisect, dms, NAKSHATRAS, global_pada
 
@@ -70,7 +71,7 @@ def get_ayanamsha(jd: float) -> float:
 def moon_sid(jd: float, topo: bool = False, lat: float = 0.0, lon: float = 0.0) -> float:
     """Сидерическая долгота Луны (0-360°). topo=True — топоцентрическая."""
     aya = get_ayanamsha(jd)
-    fl = swe.FLG_SWIEPH
+    fl = longitude_flags()
     if topo and (lat != 0.0 or lon != 0.0):
         swe.set_topo(lon, lat, 0)
         fl |= swe.FLG_TOPOCTR

@@ -49,6 +49,7 @@ const emit = defineEmits<{ submit: [] }>()
       </div>
     </div>
 
+    <PositionModeField v-model="form.position_mode" :disabled="submitting" />
     <button type="submit" class="primary" :disabled="submitting">
       {{ submitLabel || 'Рассчитать' }}
     </button>
