@@ -9,6 +9,7 @@ FastAPI сервер для ведической астрологии.
 """
 
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from datetime import date, datetime
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
@@ -208,18 +209,30 @@ class DayTimelineRequest(CalculationRequest):
     tz: float = Field(ge=-14, le=14)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
+    use_local_timezone: bool = False
+
+    def zone(self):
+        if not self.use_local_timezone:
+            return None
+        name = _tz_finder.timezone_at(lng=self.lon, lat=self.lat)
+        try:
+            if not name:
+                raise ZoneInfoNotFoundError
+            return ZoneInfo(name)
+        except ZoneInfoNotFoundError:
+            raise HTTPException(422, "Часовой пояс недоступен. Укажите смещение вручную.")
 
 
 @app.post("/api/panchang/day")
 def panchang_day(req: DayTimelineRequest):
-    result = calculate_in_mode(req.position_mode, day_timeline, req.day, req.lat, req.lon, req.tz)
+    result = calculate_in_mode(req.position_mode, day_timeline, req.day, req.lat, req.lon, req.tz, req.zone())
     return {**result, "position_mode": req.position_mode}
 
 
 @app.post("/api/panchang/month")
 def panchang_month(req: DayTimelineRequest):
     return calculate_in_mode(req.position_mode, month_summary, req.day.replace(day=1),
-                             req.lat, req.lon, req.tz)
+                             req.lat, req.lon, req.tz, req.zone())
 
 
 @app.post("/api/panchang")

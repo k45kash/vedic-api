@@ -46,3 +46,31 @@ def test_month_summary_uses_sunrise_and_local_day():
     polar = client.post("/api/panchang/month", json=dict(place, lat=78, lon=15, tz=1)).json()
     assert polar[26]["tithi"] is None
     assert polar[26]["nakshatra"] is None
+
+
+def test_civil_day_tracks_clock_changes():
+    from datetime import datetime
+
+    berlin = dict(lat=52.52, lon=13.405, tz=1, use_local_timezone=True)
+    for day, hours in [("2026-03-29", 23), ("2026-10-25", 25)]:
+        result = client.post("/api/panchang/day", json=dict(berlin, day=day)).json()
+        assert result["timezone"] == "Europe/Berlin"
+        start, end = (datetime.fromisoformat(result[key]) for key in ("start", "end"))
+        assert (end - start).total_seconds() == hours * 3600
+        for key in ("vara", "tithi", "nakshatra", "hora"):
+            for left, right in zip(result["rows"][key], result["rows"][key][1:]):
+                assert left["dt_end"] == right["dt_start"]
+        assert result["rows"]["hora"][0]["dt_start"][-6:] != result["rows"]["hora"][-1]["dt_end"][-6:]
+
+    month = client.post("/api/panchang/month", json=dict(berlin, day="2026-10-01")).json()
+    assert len(month) == 31
+    assert month[24]["nakshatra"]
+
+
+def test_automatic_stavropol_agrees_with_reference():
+    reference = client.post("/api/panchang/day", json=place).json()
+    local = client.post("/api/panchang/day", json=dict(place, use_local_timezone=True)).json()
+    for key in reference["rows"]:
+        assert [row["dt_start"] for row in reference["rows"][key]] == [
+            row["dt_start"][:-6] for row in local["rows"][key]
+        ]
