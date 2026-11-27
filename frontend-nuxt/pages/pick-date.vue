@@ -22,7 +22,7 @@ import type {
 } from '~/composables/useJyotish'
 import { dayKalams, type KalamKey, type KalamPeriod } from '~/utils/kalam'
 import {
-  explainMissingTaraWindow, findTaraWindows, TARA_FACTOR_LABELS, TARA_GOALS, TARA_TIMING_LABELS,
+  explainMissingTaraWindow, findTaraWindows, TARA_FACTOR_LABELS, TARA_GOAL_GROUPS, TARA_GOALS, TARA_TIMING_LABELS,
   type TaraTimeline, type TaraTiming, type TaraWindow,
 } from '~/calculators/tara-windows'
 
@@ -164,9 +164,14 @@ const windowGoal = computed(() => TARA_GOALS.find(goal => goal.id === goalId.val
 const eventGoals: Record<string, string> = {
   contract: 'contract', business: 'contract', newproject: 'project', factory: 'project',
   construction: 'project', renovation: 'renovation', education: 'study', cleaning: 'completion',
+  travel: 'departure', haircut: 'hair', cosmetic: 'beauty-care', bodycare: 'spa',
 }
 watch(eventId, event => { goalId.value = eventGoals[event] ?? '' })
-watch(windowGoal, goal => { if (goal) timing.value = goal.timing })
+watch(windowGoal, goal => {
+  if (!goal) return
+  timing.value = goal.timing
+  eventDuration.value = goal.minutes
+})
 const durationValid = computed(() => Number.isInteger(eventDuration.value) && eventDuration.value >= 1 && eventDuration.value <= 1440)
 const query = ref('')
 const currentEvent = computed<EventDef | null>(
@@ -677,7 +682,9 @@ const updatedLabel = computed(() =>
             <span>Цель подбора времени</span>
             <select v-model="goalId" class="pd-input">
               <option value="">Только даты</option>
-              <option v-for="goal in TARA_GOALS" :key="goal.id" :value="goal.id">{{ goal.label }}</option>
+              <optgroup v-for="group in TARA_GOAL_GROUPS" :key="group.label" :label="group.label">
+                <option v-for="goal in group.goals" :key="goal.id" :value="goal.id">{{ goal.label }}</option>
+              </optgroup>
             </select>
           </label>
           <template v-if="windowGoal">
@@ -693,6 +700,7 @@ const updatedLabel = computed(() =>
             </label>
           </template>
         </div>
+        <TaraGoalCoverage v-if="windowGoal" :goal="windowGoal" />
         <UiKv k="Место расчёта" :v="place.city" />
         <UiKv
           k="Джанма-накшатра"
@@ -973,7 +981,7 @@ const updatedLabel = computed(() =>
           <p v-else-if="!moonNakshatraCandidates.length">Для подбора времени нужны данные о накшатре рождения.</p>
           <p v-else-if="windowLoading" role="status">Подбираем время в выбранных датах…</p>
           <p v-else-if="windowError" role="alert">{{ windowError }} <UiButton @click="retryWindows++">Повторить</UiButton></p>
-          <p v-else class="pd-window-note">До трёх окон на дату по Тара-бале и факторам времени. Оценка даты на восходе показана отдельно. Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
+          <p v-else class="pd-window-note">До трёх диапазонов на дату {{ windowGoal.taras ? 'по Тара-бале и факторам времени' : 'для обзора общих условий' }}. Оценка даты на восходе показана отдельно. Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
         </template>
         <div class="pd-list">
           <div v-for="r in sortedRows" :key="r.iso" class="pd-result-day">
@@ -1033,7 +1041,7 @@ const updatedLabel = computed(() =>
 
             <span v-else class="pd-row__fail">{{ r.problem }}</span>
           </button>
-          <ul v-if="windowsByDate[r.iso]?.choices.length" class="pd-windows" aria-label="Допустимое время начала">
+          <ul v-if="windowsByDate[r.iso]?.choices.length" class="pd-windows" :aria-label="windowGoal?.taras ? 'Допустимое время начала' : 'Обзор времени начала'">
             <li v-for="choice in windowsByDate[r.iso]?.choices" :key="choice.firstStart">
               <NuxtLink :to="openPanchanga(r, choice)">
                 {{ formatStart(choice.firstStart) }}<template v-if="choice.firstStart !== choice.lastStart">–{{ formatStart(choice.lastStart) }}</template>

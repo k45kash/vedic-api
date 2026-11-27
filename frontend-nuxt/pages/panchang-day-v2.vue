@@ -6,7 +6,7 @@ import tithis from '~content/tithi.json'
 import { ApiError } from '~/composables/useApi'
 import { nakName, taraFor } from '~/composables/useJyotish'
 import {
-  explainMissingTaraWindow, findTaraWindows, isWednesdayAbhijit, parseTaraDate as ms, TARA_FACTOR_LABELS, TARA_GOALS,
+  explainMissingTaraWindow, findTaraWindows, isWednesdayAbhijit, parseTaraDate as ms, TARA_FACTOR_LABELS, TARA_GOAL_GROUPS, TARA_GOALS,
   TARA_TIMING_LABELS, type TaraTiming, type TaraTimeline,
 } from '~/calculators/tara-windows'
 
@@ -372,19 +372,24 @@ const overlaps = computed(() => abhijitComparison.value.flatMap(item => item.ove
 const hasWednesdayAbhijit = computed(() => abhijitComparison.value.some(({ abhijit }) =>
   isWednesdayAbhijit(abhijit, timeline.value?.rows.vara ?? []),
 ))
-const initialGoal = TARA_GOALS.findIndex(goal => goal.id === requested.goal)
-const goalIndex = ref(initialGoal < 0 ? 0 : initialGoal)
-const selectedGoal = computed(() => TARA_GOALS[goalIndex.value])
+const initialGoal = TARA_GOALS.find(goal => goal.id === requested.goal) ?? TARA_GOALS[0]
+const goalId = ref(initialGoal.id)
+const selectedGoal = computed(() => TARA_GOALS.find(goal => goal.id === goalId.value) ?? TARA_GOALS[0])
 const initialDuration = typeof requested.duration === 'string' ? Number(requested.duration) : NaN
-const eventDuration = ref(Number.isInteger(initialDuration) && initialDuration >= 1 && initialDuration <= 1500 ? initialDuration : 30)
+const eventDuration = ref(Number.isInteger(initialDuration) && initialDuration >= 1 && initialDuration <= 1500 ? initialDuration : selectedGoal.value.minutes)
 const timing = ref<TaraTiming>(requested.timing === 'start' || requested.timing === 'whole' ? requested.timing : selectedGoal.value.timing)
-watch(selectedGoal, goal => { timing.value = goal.timing })
+watch(selectedGoal, goal => {
+  timing.value = goal.timing
+  eventDuration.value = goal.minutes
+})
+const checkSelectedTime = ref(false)
 const windowDay = computed(() => ({ start: windowStart.value, end: windowStart.value + dayMinutes.value * 60000 }))
 const windowChoices = computed(() => {
   const rows = timeline.value?.rows
   if (!rows || moonUncertainReason.value === 'boundary') return []
   return findTaraWindows(
     windowDay.value, rows, moonNakshatraCandidates.value, selectedGoal.value, eventDuration.value, timing.value,
+    checkSelectedTime.value ? instant.value : undefined,
   )
 })
 const emptyWindowReason = computed(() => timeline.value
@@ -561,47 +566,52 @@ const karakas = computed(() => {
       </section>
       <details class="panel calculation-note time-picker" :open="requested.goal !== undefined || undefined">
         <summary>Подобрать время внутри дня</summary>
+        <div class="picker-controls">
+          <label>Цель <select v-model="goalId">
+            <optgroup v-for="group in TARA_GOAL_GROUPS" :key="group.label" :label="group.label">
+              <option v-for="goal in group.goals" :key="goal.id" :value="goal.id">{{ goal.label }}</option>
+            </optgroup>
+          </select></label>
+          <label>Длительность, мин <input v-model.number="eventDuration" type="number" min="1" :max="dayMinutes" step="1"></label>
+          <label>Проверять
+            <select v-model="timing">
+              <option v-for="(name, value) in TARA_TIMING_LABELS" :key="value" :value="value">{{ name }}</option>
+            </select>
+          </label>
+        </div>
+        <label class="check-time"><input type="checkbox" v-model="checkSelectedTime"> Проверить моё время · {{ clock }}</label>
+        <p>Тара, Раху-кала, Бхадра и предупреждения школы проверяются {{ timing === 'start' ? 'в момент начала' : 'на протяжении всего события' }}. Смена Абхиджит сама по себе не ограничивает диапазон старта.</p>
+        <p v-if="moonUncertainReason === 'time-unknown' && selectedGoal.taras">Подходящая для цели тара нужна при каждом возможном варианте накшатры рождения.</p>
+        <TaraGoalCoverage :goal="selectedGoal" />
         <p v-if="!hasProfile">Для подбора по Тара-бале укажите <NuxtLink to="/me">данные рождения</NuxtLink>.</p>
         <p v-else-if="birthLoading">Рассчитываем накшатру рождения…</p>
         <p v-else-if="!timeline.rows.vara.length">Подбор недоступен без расчёта цикла восхода и заката.</p>
         <p v-else-if="moonUncertainReason === 'boundary'">Накшатра рождения пограничная. Уточните её в <NuxtLink to="/me">профиле</NuxtLink>.</p>
         <p v-else-if="!taraTrack.length">Нет данных для подбора по Тара-бале.</p>
-        <template v-else>
-          <div class="picker-controls">
-            <label>Цель <select v-model.number="goalIndex">
-              <option v-for="(goal, index) in TARA_GOALS" :key="goal.label" :value="index">{{ goal.label }}</option>
-            </select></label>
-            <label>Длительность, мин <input v-model.number="eventDuration" type="number" min="1" :max="dayMinutes" step="1"></label>
-            <label>Проверять
-              <select v-model="timing">
-                <option v-for="(name, value) in TARA_TIMING_LABELS" :key="value" :value="value">{{ name }}</option>
-              </select>
-            </label>
-          </div>
-          <p>Тара, Раху-кала, Бхадра и предупреждения школы проверяются {{ timing === 'start' ? 'в момент начала' : 'на протяжении всего события' }}. Смена Абхиджит сама по себе не ограничивает диапазон старта.</p>
-          <p v-if="moonUncertainReason === 'time-unknown'">Подходящая для цели тара нужна при каждом возможном варианте накшатры рождения.</p>
-          <p v-if="!Number.isInteger(eventDuration) || eventDuration < 1 || eventDuration > dayMinutes">Укажите целое число минут в пределах выбранных суток.</p>
-          <ul v-else-if="windowChoices.length">
-            <li v-for="choice in windowChoices" :key="choice.firstStart">
-              <div>
-                <strong>Начать {{ windowClock(choice.firstStart) }}<template v-if="choice.lastStart !== choice.firstStart">–{{ windowClock(choice.lastStart) }}</template></strong>
-                <p>{{ choice.names.join(' / ') }} · {{ selectedGoal.reason }}</p>
-                <p v-if="choice.beginsInAbhijit">Первый старт приходится на Абхиджит.</p>
-                <p v-for="flag in choice.warnings" :key="flag" class="school-warning">
-                  {{ TARA_FACTOR_LABELS[flag] }}<template v-if="flag === 'wednesday'"> · по курсу лучше отложить важное начинание</template>
-                </p>
-                <p v-if="choice.schoolPositions.length" class="school-warning">По курсу лучше отложить важный старт · {{ choice.schoolPositions.join(' / ') }}-я позиция от рождения.</p>
-                <details v-if="choice.changes.length">
-                  <summary>Что меняется при первом старте</summary>
-                  <p v-for="change in choice.changes" :key="change.at + change.label">{{ windowClock(change.at) }} · {{ change.label }}</p>
-                </details>
-              </div>
-              <button type="button" @click="showMinuteOnScale(choice.firstStart)"
-                :aria-label="'Выбрать начало в ' + windowClock(choice.firstStart)">На шкалу</button>
-            </li>
-          </ul>
-          <p v-else>{{ emptyWindowReason }}</p>
-        </template>
+        <p v-else-if="!Number.isInteger(eventDuration) || eventDuration < 1 || eventDuration > dayMinutes">Укажите целое число минут в пределах выбранных суток.</p>
+        <ul v-else-if="windowChoices.length">
+          <li v-for="choice in windowChoices" :key="choice.firstStart">
+            <div>
+              <strong>{{ checkSelectedTime ? 'Проверка на' : selectedGoal.taras ? 'Начать' : 'Обзор стартов' }} {{ windowClock(choice.firstStart) }}<template v-if="choice.lastStart !== choice.firstStart">–{{ windowClock(choice.lastStart) }}</template></strong>
+              <p>{{ choice.names.join(' / ') }}<template v-if="choice.fits === true"> · {{ selectedGoal.reason }}</template></p>
+              <p v-if="checkSelectedTime && choice.fits === false" class="school-warning">Тара-бала не соответствует ориентиру для этой цели в выбранном режиме.</p>
+              <p v-if="checkSelectedTime && !choice.caution">Предупреждений по проверяемым факторам нет.</p>
+              <p v-if="choice.beginsInAbhijit">{{ checkSelectedTime ? 'Выбранное время приходится на Абхиджит.' : 'Первый старт приходится на Абхиджит.' }}</p>
+              <p v-for="flag in choice.warnings" :key="flag" class="school-warning">
+                {{ TARA_FACTOR_LABELS[flag] }}<template v-if="flag === 'wednesday'"> · по курсу лучше отложить важное начинание</template>
+              </p>
+              <p v-if="choice.schoolPositions.length" class="school-warning">По курсу лучше отложить важный старт · {{ choice.schoolPositions.join(' / ') }}-я позиция от рождения.</p>
+              <details v-if="choice.changes.length">
+                <summary>{{ checkSelectedTime ? 'Что меняется во время события' : 'Что меняется при первом старте' }}</summary>
+                <p v-for="change in choice.changes" :key="change.at + change.label">{{ windowClock(change.at) }} · {{ change.label }}</p>
+              </details>
+            </div>
+            <button v-if="!checkSelectedTime" type="button" @click="showMinuteOnScale(choice.firstStart)"
+              :aria-label="'Выбрать начало в ' + windowClock(choice.firstStart)">На шкалу</button>
+          </li>
+        </ul>
+        <p v-else-if="checkSelectedTime">{{ instant + eventDuration * 60000 > windowDay.end ? 'Событие выходит за пределы выбранных суток.' : 'Для выбранной минуты не удалось получить нужные факторы.' }}</p>
+        <p v-else>{{ emptyWindowReason }}</p>
       </details>
       <details v-if="dayEvents.length" class="panel day-events">
         <summary>Переходы дня</summary>
@@ -746,6 +756,7 @@ const karakas = computed(() => {
 .picker-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; }
 .picker-controls select { max-width: 100%; }
 .picker-controls input { width: 6em; }
+.check-time { display: block; margin-top: 10px; }
 .time-picker ul { list-style: none; padding: 0; margin: 8px 0 0; }
 .time-picker li { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
 .time-picker li p { margin: 4px 0 0; }
