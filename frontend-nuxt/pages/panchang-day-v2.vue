@@ -579,7 +579,7 @@ const karakas = computed(() => {
             </select>
           </label>
         </div>
-        <label class="check-time"><input type="checkbox" v-model="checkSelectedTime"> Проверить моё время · {{ clock }}</label>
+        <label class="check-time"><input type="checkbox" v-model="checkSelectedTime"> Проверить выбранное время · {{ clock }}</label>
         <p>Тара, Раху-кала, Бхадра и предупреждения школы проверяются {{ timing === 'start' ? 'в момент начала' : 'на протяжении всего события' }}. Смена Абхиджит сама по себе не ограничивает диапазон старта.</p>
         <p v-if="moonUncertainReason === 'time-unknown' && selectedGoal.taras">Подходящая для цели тара нужна при каждом возможном варианте накшатры рождения.</p>
         <TaraGoalCoverage :goal="selectedGoal" />
