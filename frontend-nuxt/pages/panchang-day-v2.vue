@@ -506,7 +506,18 @@ const karakas = computed(() => {
         </div>
       </section>
       <button v-if="mobile" class="track-toggle" :aria-expanded="extraTracks" @click="extraTracks = !extraTracks">{{ extraTracks ? 'Свернуть дополнительные ряды' : 'Показать дополнительные ряды' }}</button>
-      <label class="minute-slider">Минута на шкале <input type="range" min="0" :max="dayMinutes - 1" :value="minute" :aria-valuetext="clockOptions.length > 1 && selected ? clock + ' · ' + offsetLabel(selected.offset) : clock" @input="selectMinute(Number(($event.target as HTMLInputElement).value))"></label>
+      <div class="scale-controls">
+        <label class="minute-slider">
+          <span>Минута на шкале</span>
+          <input type="range" min="0" :max="dayMinutes - 1" :value="minute"
+            :aria-valuetext="clockOptions.length > 1 && selected ? clock + ' · ' + offsetLabel(selected.offset) : clock"
+            @input="selectMinute(Number(($event.target as HTMLInputElement).value))">
+        </label>
+        <div class="scale-day-buttons" role="group" aria-label="Дни на шкале">
+          <button type="button" aria-label="Предыдущий день на шкале" title="Предыдущий день" @click="shift(-1)">‹</button>
+          <button type="button" aria-label="Следующий день на шкале" title="Следующий день" @click="shift(1)">›</button>
+        </div>
+      </div>
       <div ref="timelinePanel" class="scroll panel" tabindex="-1" role="region" aria-label="Таблица Панчанги"><div class="scale">
         <div class="marker-layer" aria-hidden="true"><div class="marker" :class="{ 'near-end': minute > dayMinutes - 120 }" :style="{ left: minute / dayMinutes * 100 + '%' }"><span>{{ clock }}</span></div></div>
         <div class="track"><b>Часы</b><div class="axis"><span v-for="slot in hourTicks" :key="slot.epoch" :title="offsetLabel(slot.offset)" :style="{ left: slot.index / dayMinutes * 100 + '%' }">{{ Number(slot.local.slice(0,2)) }}</span></div></div>
@@ -660,8 +671,12 @@ const karakas = computed(() => {
 .overview dd + dd { font-size: 12px; }
 .next { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--line); }
 .next p { margin: 0; }
-.minute-slider { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-.pd input[type="range"] { accent-color: #166047; width: min(100%, 320px); padding: 0; }
+.scale-controls { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.minute-slider { display: flex; align-items: center; gap: 10px; flex: 1 1 0; min-width: 0; max-width: 470px; }
+.minute-slider span { flex: 0 0 auto; }
+.scale-day-buttons { display: flex; flex: 0 0 auto; gap: 4px; }
+.scale-day-buttons button { min-width: 40px; min-height: 40px; padding: 3px; font-size: 22px; line-height: 1; }
+.pd input[type="range"] { accent-color: #166047; flex: 1 1 auto; min-width: 0; max-width: 320px; padding: 0; }
 .scale { position: relative; --track-label-width: 112px; }
 .track { grid-template-columns: var(--track-label-width) 1fr; }
 .track > b { position: sticky; left: 0; z-index: 4; background: var(--surface); padding: 4px; align-self: stretch; display: grid; align-items: center; }
