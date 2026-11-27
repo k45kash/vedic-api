@@ -15,80 +15,51 @@ export type TaraGoal = {
   ruleId?: string
 }
 
-const TARA_GOAL_GROUPS: { label: string; goals: TaraGoal[] }[] = [
-  { label: 'Основные цели', goals: [
-      { id: 'meetings', label: 'Переговоры и встречи', taras: [8, 9], reason: 'общение и сотрудничество', timing: 'whole', minutes: 30 },
-      { id: 'contract', ruleId: 'contract', label: 'Договор и деловые вопросы', taras: [2, 9], reason: 'договорённости и деловые вопросы', timing: 'start', minutes: 30 },
-      { id: 'project', ruleId: 'newproject', label: 'Старт долгосрочного проекта', taras: [4, 6], reason: 'созидание, устойчивость и достижение целей', timing: 'start', minutes: 30 },
-      { id: 'renovation', ruleId: 'renovation', label: 'Ремонт и обустройство', taras: [4], reason: 'ремонт и обустройство дома', timing: 'whole', minutes: 30 },
-      { id: 'study', ruleId: 'education', label: 'Учёба и сосредоточенная работа', taras: [6], reason: 'учёба, внимание и дисциплина', timing: 'whole', minutes: 30 },
-      { id: 'completion', label: 'Завершение начатого и порядок', taras: [3, 5, 7], reason: 'ревизия, исправление ошибок и завершение дел', timing: 'whole', minutes: 30 },
-  ] },
-  { label: 'Работа и проекты', goals: [
-      { id: 'interview', label: 'Собеседование или презентация', taras: [8, 9], timing: 'whole', minutes: 45, reason: 'встречи и публичность', missing: 'Отдельные правила для собеседований и выступлений.' },
-      { id: 'first-workday', label: 'Первый день на новой работе', taras: [6, 9], timing: 'start', minutes: 1, reason: 'карьера и важные дела', missing: 'Отдельные правила для начала работы.' },
-      { id: 'publication', label: 'Запуск сайта, рекламы или публикации', taras: [9], timing: 'start', minutes: 1, reason: 'публичность и продвижение проектов', missing: 'Отдельные правила для запуска сайта, рекламы и публикаций.' },
-      { id: 'acceptance', label: 'Приёмка работ или осмотр объекта', taras: null, timing: 'whole', minutes: 60, reason: 'общие факторы времени', missing: 'Правила Тара-балы для приёмки и осмотра.' },
-      { id: 'acceptance-act', label: 'Подписание акта приёмки', taras: [2, 9], timing: 'start', minutes: 1, reason: 'договоры и документы', missing: 'Отдельные правила для подписания акта.' },
-  ] },
-  { label: 'Путешествия', goals: [
-      { id: 'departure', ruleId: 'travel', label: 'Выезд в поездку', taras: [2, 9], timing: 'start', minutes: 1, reason: 'начало путешествия', missing: 'Отдельные правила для разных видов транспорта и этапов поездки.' },
-      { id: 'road-trip', ruleId: 'travel', label: 'Старт автопутешествия', taras: [2, 9], timing: 'start', minutes: 1, reason: 'начало путешествия', missing: 'Отдельные правила для выезда на автомобиле.' },
-      { id: 'move-in', label: 'Заселение при переезде', taras: null, timing: 'start', minutes: 1, reason: 'общие факторы времени', missing: 'Правила Тара-балы для момента заселения.' },
-  ] },
-  { label: 'Красота и уход', goals: [
-      { id: 'hair', ruleId: 'haircut', label: 'Стрижка', taras: null, timing: 'whole', minutes: 90, reason: 'общие факторы времени', missing: 'Отдельный ориентир по Тара-бале для стрижки.' },
-      { id: 'hair-color', label: 'Окрашивание волос', taras: null, timing: 'whole', minutes: 90, reason: 'общие факторы времени', missing: 'Отдельные правила Тара-балы, титхи и йоги для окрашивания.' },
-      { id: 'nails', label: 'Маникюр или педикюр', taras: null, timing: 'whole', minutes: 90, reason: 'общие факторы времени', missing: 'Отдельное правило Тара-балы для маникюра и педикюра.' },
-      { id: 'beauty-care', ruleId: 'cosmetic', label: 'Уходовая процедура', taras: null, timing: 'whole', minutes: 60, reason: 'общие факторы времени', missing: 'Правила Тара-балы для выбранного вида ухода.' },
-      { id: 'spa', ruleId: 'bodycare', label: 'Массаж или спа', taras: null, timing: 'whole', minutes: 60, reason: 'общие факторы времени', missing: 'Правила, по которым общий ориентир для массажа применять к разным спа-процедурам.' },
-  ] },
-  { label: 'Отношения', goals: [
-      { id: 'first-date', label: 'Первое свидание', taras: [2, 9], timing: 'whole', minutes: 90, reason: 'свидания и отношения', missing: 'Отдельные правила для первого свидания. Подбор для двоих требует второго профиля и правила сравнения.' },
-      { id: 'date-night', label: 'Свидание вдвоём', taras: [2, 9], timing: 'whole', minutes: 120, reason: 'свидания и отношения', missing: 'Подбор для двоих требует второго профиля и правила сравнения.' },
-      { id: 'proposal', label: 'Предложение руки и сердца', taras: null, timing: 'start', minutes: 1, reason: 'общие факторы времени', missing: 'Отдельные правила для момента предложения. Для подбора на двоих — второй профиль и правило сравнения.' },
-      { id: 'reconciliation', label: 'Разговор для примирения', taras: [8], timing: 'whole', minutes: 45, reason: 'улучшение отношений', missing: 'Отдельные критерии примирения. Для подбора на двоих — второй профиль и правило сравнения.' },
-      { id: 'personal-talk', label: 'Важный личный разговор', taras: [8], timing: 'whole', minutes: 45, reason: 'разговоры и отношения', missing: 'Отдельные критерии для темы разговора. Для подбора на двоих — второй профиль и правило сравнения.' },
-      { id: 'closure-talk', label: 'Разговор о завершении общения', taras: null, timing: 'whole', minutes: 45, reason: 'общие факторы времени', missing: 'Правила Тара-балы для разговора о завершении отношений.' },
-  ] },
-]
-
-
 const EVENT_GROUPS = [
-  { label: 'Семья и дом', ids: ['wedding', 'house', 'namakarana', 'conception', 'construction', 'renovation', 'move-in'] },
-  { label: 'Отношения', ids: ['first-date', 'date-night', 'proposal', 'reconciliation', 'personal-talk', 'closure-talk'] },
-  { label: 'Работа и деньги', ids: ['meetings', 'business', 'newproject', 'factory', 'contract', 'interview',
-    'first-workday', 'publication', 'acceptance', 'acceptance-act', 'finance', 'court', 'conflict', 'sell_stuff'] },
+  { label: 'Семья и дом', ids: ['wedding', 'house', 'namakarana', 'conception', 'construction', 'renovation'] },
+  { label: 'Дело и деньги', ids: ['business', 'newproject', 'factory', 'contract', 'finance', 'court', 'conflict', 'sell_stuff'] },
   { label: 'Покупки', ids: ['vehicle', 'buy_electronics', 'buy_clothes'] },
   { label: 'Учёба и творчество', ids: ['education', 'creative'] },
-  { label: 'Дорога и отдых', ids: ['travel', 'road-trip', 'rest', 'sport'] },
-  { label: 'Красота и уход', ids: ['haircut', 'hair-color', 'nails', 'cosmetic', 'bodycare'] },
-  { label: 'Здоровье', ids: ['medical'] },
+  { label: 'Дорога и отдых', ids: ['travel', 'rest', 'sport'] },
+  { label: 'Тело и здоровье', ids: ['medical', 'haircut', 'cosmetic', 'bodycare'] },
   { label: 'Духовная практика', ids: ['spiritual', 'sadhana', 'tapas'] },
-  { label: 'Быт и природа', ids: ['completion', 'cleaning', 'planting', 'aquarium', 'pet_care'] },
+  { label: 'Быт и природа', ids: ['cleaning', 'planting', 'aquarium', 'pet_care'] },
 ]
 
-const presets = TARA_GOAL_GROUPS.flatMap(group => group.goals)
-const matchingPresets = new Map(presets.flatMap(goal =>
-  goal.ruleId && goal.id !== 'road-trip' ? [[goal.ruleId, goal] as const] : [],
-))
+const timePresets: Record<string, Omit<TaraGoal, 'id' | 'ruleId' | 'label'>> = {
+  contract: { taras: [2, 9], reason: 'договорённости и деловые вопросы', timing: 'start', minutes: 30 },
+  newproject: { taras: [4, 6], reason: 'созидание, устойчивость и достижение целей', timing: 'start', minutes: 30 },
+  renovation: { taras: [4], reason: 'ремонт и обустройство дома', timing: 'whole', minutes: 30 },
+  education: { taras: [6], reason: 'учёба, внимание и дисциплина', timing: 'whole', minutes: 30 },
+  travel: { taras: [2, 9], timing: 'start', minutes: 1, reason: 'начало путешествия', missing: 'Отдельные правила для разных видов транспорта и этапов поездки.' },
+  haircut: { taras: null, timing: 'whole', minutes: 90, reason: 'общие факторы времени', missing: 'Отдельный ориентир по Тара-бале для стрижки.' },
+  cosmetic: { taras: null, timing: 'whole', minutes: 60, reason: 'общие факторы времени', missing: 'Правила Тара-балы для выбранного вида ухода.' },
+  bodycare: { taras: null, timing: 'whole', minutes: 60, reason: 'общие факторы времени', missing: 'Правила, по которым общий ориентир для массажа применять к разным спа-процедурам.' },
+}
+
+const legacyEventIds = new Map<string, string>([
+  ['project', 'newproject'],
+  ['study', 'education'],
+  ['departure', 'travel'],
+  ['hair', 'haircut'],
+  ['beauty-care', 'cosmetic'],
+  ['spa', 'bodycare'],
+])
+
 const eventDefs = listEvents()
-const catalog: TaraGoal[] = [
-  ...eventDefs.map(event => {
-    const preset = matchingPresets.get(event.id)
-    return {
-      id: event.id,
-      ruleId: event.id,
-      label: event.label === 'Садхана' ? event.name : event.label,
-      taras: preset?.taras ?? null,
-      reason: preset?.reason ?? '',
-      timing: preset?.timing ?? 'start' as const,
-      minutes: preset?.minutes ?? 30,
-      missing: preset?.missing,
-    }
-  }),
-  ...presets.filter(goal => !goal.ruleId || goal.id === 'road-trip'),
-]
+const catalog: TaraGoal[] = eventDefs.map(event => {
+  const preset = timePresets[event.id]
+  return {
+    id: event.id,
+    ruleId: event.id,
+    label: event.label === 'Садхана' ? event.name : event.label,
+    taras: preset?.taras ?? null,
+    reason: preset?.reason ?? '',
+    timing: preset?.timing ?? 'start',
+    minutes: preset?.minutes ?? 30,
+    missing: preset?.missing,
+  }
+})
 const assignedIds = new Set(EVENT_GROUPS.flatMap(group => group.ids))
 export const EVENT_GOAL_GROUPS = [
   ...EVENT_GROUPS.map(group => ({
@@ -99,7 +70,8 @@ export const EVENT_GOAL_GROUPS = [
 ].filter(group => group.goals.length)
 
 export function findEventGoal(id: unknown) {
-  const canonical = presets.find(goal => goal.id === id && goal.ruleId && matchingPresets.get(goal.ruleId) === goal)?.ruleId ?? id
+  if (typeof id !== 'string') return
+  const canonical = legacyEventIds.get(id) ?? id
   return catalog.find(goal => goal.id === canonical)
 }
 

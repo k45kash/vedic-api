@@ -87,7 +87,7 @@ const shareQuery = computed(() => ({
 async function share() {
   const url = new URL('/panchang-day-v2', window.location.origin)
   url.search = new URLSearchParams(shareQuery.value).toString()
-  if (requested.goal !== undefined || goalId.value !== defaultGoal.id || checkSelectedTime.value) {
+  if (linkedGoal || goalId.value !== defaultGoal.id || checkSelectedTime.value) {
     url.searchParams.set('goal', goalId.value)
     url.searchParams.set('duration', String(eventDuration.value))
     url.searchParams.set('timing', timing.value)
@@ -378,19 +378,19 @@ const overlaps = computed(() => abhijitComparison.value.flatMap(item => item.ove
 const hasWednesdayAbhijit = computed(() => abhijitComparison.value.some(({ abhijit }) =>
   isWednesdayAbhijit(abhijit, timeline.value?.rows.vara ?? []),
 ))
-const defaultGoal = findEventGoal('meetings')!
-const initialGoal = findEventGoal(requested.goal) ?? defaultGoal
-const goalId = ref(initialGoal.id)
+const defaultGoal = findEventGoal('wedding')!
+const linkedGoal = findEventGoal(requested.goal)
+const goalId = ref(linkedGoal?.id ?? defaultGoal.id)
 const selectedGoal = computed(() => findEventGoal(goalId.value) ?? defaultGoal)
 const eventRule = computed(() => eventRuleForGoal(selectedGoal.value))
-const initialDuration = typeof requested.duration === 'string' ? Number(requested.duration) : NaN
+const initialDuration = linkedGoal && typeof requested.duration === 'string' ? Number(requested.duration) : NaN
 const eventDuration = ref(Number.isInteger(initialDuration) && initialDuration >= 1 && initialDuration <= 1500 ? initialDuration : selectedGoal.value.minutes)
-const timing = ref<TaraTiming>(requested.timing === 'start' || requested.timing === 'whole' ? requested.timing : selectedGoal.value.timing)
+const timing = ref<TaraTiming>(linkedGoal && (requested.timing === 'start' || requested.timing === 'whole') ? requested.timing : selectedGoal.value.timing)
 watch(selectedGoal, goal => {
   timing.value = goal.timing
   eventDuration.value = goal.minutes
 })
-const checkSelectedTime = ref(requested.check === '1')
+const checkSelectedTime = ref(Boolean(linkedGoal && requested.check === '1'))
 watch([goalId, eventDuration, timing, checkSelectedTime], () => { shareUrl.value = ''; sharedStatus.value = '' })
 const windowDay = computed(() => ({ start: windowStart.value, end: windowStart.value + dayMinutes.value * 60000 }))
 const timeCandidates = computed(() => moonUncertainReason.value === 'boundary' ? [] : moonNakshatraCandidates.value)
@@ -574,7 +574,7 @@ const karakas = computed(() => {
         </template>
         <p v-else>Для выбранного момента нет данных о Тара-бале.</p>
       </section>
-      <details class="panel calculation-note time-picker" :open="requested.goal !== undefined || undefined">
+      <details class="panel calculation-note time-picker" :open="linkedGoal ? true : undefined">
         <summary>Подобрать время внутри дня</summary>
         <div class="picker-controls">
           <label>Событие <select v-model="goalId">

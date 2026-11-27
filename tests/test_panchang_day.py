@@ -160,10 +160,9 @@ def test_общий_каталог_и_проверка_смены_накшатр
       const [whole] = findTaraWindows(day, timeline, [], wedding, 60, 'whole', start)
       const choices = findTaraWindows(day, timeline, [], wedding, 60, 'whole')
       out({
-        complete: listEvents().every(event => ids.includes(event.id)),
-        unique: ids.length === new Set(ids).size,
+        sameCatalog: JSON.stringify([...ids].sort()) === JSON.stringify(listEvents().map(event => event.id).sort()),
         alias: findEventGoal('departure').id,
-        extra: ids.includes('first-date'),
+        extra: ['nails', 'first-date', 'acceptance', 'road-trip'].some(id => findEventGoal(id) !== undefined),
         startVeto: atStart.veto, wholeVeto: whole.veto,
         blockedNakshatra: whole.nakshatraRule.sign,
         weekday: whole.weekdayRule.sign,
@@ -172,7 +171,8 @@ def test_общий_каталог_и_проверка_смены_накшатр
       })
     """, tmp_path)
 
-    assert result["complete"] and result["unique"] and result["extra"]
+    assert result["sameCatalog"]
+    assert result["extra"] is False
     assert result["alias"] == "travel"
     assert result["startVeto"] is False
     assert result["wholeVeto"] is True

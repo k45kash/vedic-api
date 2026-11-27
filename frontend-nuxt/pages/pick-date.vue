@@ -145,7 +145,7 @@ const currentRule = computed(() => currentEvent.value && eventRuleForGoal(curren
 const showWindows = ref(false)
 const eventDuration = ref(currentEvent.value?.minutes ?? 30)
 const timing = ref<TaraTiming>(currentEvent.value?.timing ?? 'start')
-const windowGoal = computed(() => showWindows.value || !currentRule.value ? currentEvent.value : undefined)
+const windowGoal = computed(() => showWindows.value ? currentEvent.value : undefined)
 watch(currentEvent, event => {
   if (!event) return
   timing.value = event.timing
@@ -312,7 +312,7 @@ async function recompute() {
   const t = transits.value
   const rule = currentRule.value
   const token = ++runToken
-  if (!p || !t || !currentEvent.value || loadedKey.value !== dataKey.value) {
+  if (!p || !t || !rule || loadedKey.value !== dataKey.value) {
     rows.value = []
     scoring.value = false
     return
@@ -357,10 +357,6 @@ async function recompute() {
     const split = splitTithi(tithi.num)
     base.tithiNo = split.tithi
     base.paksha = split.paksha
-    if (!rule) {
-      base.problem = 'Нет методики оценки дня'
-      return base
-    }
     base.score = await scoreEvent({
       eventId: rule.id,
       janmaNo: janma,
@@ -628,7 +624,7 @@ const updatedLabel = computed(() =>
         <UiDisclaimer v-if="rangeError" tone="warn">{{ rangeError }}</UiDisclaimer>
         <UiKv v-else k="Дней в диапазоне" :v="String(rangeLen)" />
         <div class="pd-time-controls">
-          <label v-if="currentRule">
+          <label>
             <input v-model="showWindows" type="checkbox"> Подобрать ещё и время внутри дня
           </label>
           <template v-if="windowGoal">
@@ -695,15 +691,15 @@ const updatedLabel = computed(() =>
     </UiCard>
 
     <!-- ═══════════ РЕЗУЛЬТАТ ═══════════ -->
-    <template v-else-if="rows.length && currentEvent">
+    <template v-else-if="rows.length && currentEvent && currentRule">
       <UiSectionHead>
         Итог: {{ currentEvent.label.toLowerCase() }}
         <UiMethodNote id="А9" />
       </UiSectionHead>
       <!-- Вводный абзац модели — из content/ui_texts.json (picker_lead). -->
-      <p v-if="currentRule && t('picker_lead')" class="pd-msg">{{ t('picker_lead') }}</p>
+      <p v-if="t('picker_lead')" class="pd-msg">{{ t('picker_lead') }}</p>
 
-      <UiCard v-if="currentRule">
+      <UiCard>
         <UiVerdict
           :score="`${summary.great + summary.good}`"
           :tone="summary.great + summary.good ? 'good' : summary.ok ? 'neutral' : 'bad'"
@@ -741,16 +737,12 @@ const updatedLabel = computed(() =>
         </UiDisclaimer>
       </UiCard>
 
-      <UiCard v-else>
-        <p class="pd-msg">Для события «{{ currentEvent.label }}» пока нет правил оценки даты на восходе. Для каждого дня можно проверить время по имеющимся факторам.</p>
-      </UiCard>
-
       <!-- ─────────── РАЗБОР ДНЯ ─────────── -->
       <template v-if="selected">
         <UiSectionHead title="Разбор дня" />
         <UiCard
           :title="`${fmtDate(selected.date)}, ${selected.weekday.toLowerCase()}`"
-          :subtitle="currentRule?.name || currentEvent.label"
+          :subtitle="currentRule.name"
         >
           <NuxtLink :to="openPanchanga(selected)" class="btn btn--ghost">
             <UiIcon name="calendar" style="width:15px;height:15px" />
@@ -822,60 +814,57 @@ const updatedLabel = computed(() =>
             </UiProOnly>
           </template>
 
-          <p v-else-if="currentRule" class="pd-msg">
+          <p v-else class="pd-msg">
             Эти сутки посчитать не удалось: {{ selected.problem }}.
           </p>
 
-          <template v-if="currentRule">
-            <!-- Списки справочника показываем как есть: процент — это свёртка,
-                 а решение принимают по самим спискам. Титхи, записанные словом
-                 («Амавасья», «Пурнима»), и категория «гандантовые» в баллы теперь
-                 входят — см. пометки Б2 и Б3 ниже. -->
-            <div class="pd-subhead">Что справочник говорит об этом событии</div>
-            <UiKv
-              v-if="currentRule.good_nakshatras?.length"
-              k="Благоприятные накшатры" :v="currentRule.good_nakshatras.join(', ')"
-              tone="good"
-            />
-            <UiKv
-              v-if="currentRule.avoid_nakshatras?.length"
-              k="Избегаемые накшатры" :v="currentRule.avoid_nakshatras.join(', ')"
-              tone="bad"
-            />
-            <UiKv
-              v-if="currentRule.good_tithis?.length"
-              k="Благоприятные титхи" :v="currentRule.good_tithis.join(', ')"
-              tone="good"
-            />
-            <UiKv
-              v-if="currentRule.avoid_tithis?.length"
-              k="Избегаемые титхи" :v="currentRule.avoid_tithis.join(', ')"
-              tone="bad"
-            />
-            <UiKv
-              v-if="currentRule.good_days?.length"
-              k="Благоприятные дни" :v="currentRule.good_days.join(', ')"
-              tone="good"
-            />
-            <UiKv
-              v-if="currentRule.avoid_days?.length"
-              k="Избегаемые дни" :v="currentRule.avoid_days.join(', ')"
-              tone="bad"
-            />
-            <UiDisclaimer>
-              Модель учитывает накшатру, титхи, день недели, йогу и тара-балу при наличии профиля. Титхи,
-              записанные словом («Амавасья», «Пурнима»), и категория «гандантовые»
-              тоже учитываются. Оговорку «по ряду школ» модель не различает —
-              такая запись считается обычным совпадением, поэтому список стоит
-              сверить глазами.
-            </UiDisclaimer>
-            <div class="pd-notes">
-              <UiMethodNote id="Б2" />
-              <UiMethodNote id="Б3" />
-            </div>
-            <UiDisclaimer :entry="disclaimer('events-muhurta')" />
-
-          </template>
+          <!-- Списки справочника показываем как есть: процент — это свёртка,
+               а решение принимают по самим спискам. Титхи, записанные словом
+               («Амавасья», «Пурнима»), и категория «гандантовые» в баллы теперь
+               входят — см. пометки Б2 и Б3 ниже. -->
+          <div class="pd-subhead">Что справочник говорит об этом событии</div>
+          <UiKv
+            v-if="currentRule.good_nakshatras?.length"
+            k="Благоприятные накшатры" :v="currentRule.good_nakshatras.join(', ')"
+            tone="good"
+          />
+          <UiKv
+            v-if="currentRule.avoid_nakshatras?.length"
+            k="Избегаемые накшатры" :v="currentRule.avoid_nakshatras.join(', ')"
+            tone="bad"
+          />
+          <UiKv
+            v-if="currentRule.good_tithis?.length"
+            k="Благоприятные титхи" :v="currentRule.good_tithis.join(', ')"
+            tone="good"
+          />
+          <UiKv
+            v-if="currentRule.avoid_tithis?.length"
+            k="Избегаемые титхи" :v="currentRule.avoid_tithis.join(', ')"
+            tone="bad"
+          />
+          <UiKv
+            v-if="currentRule.good_days?.length"
+            k="Благоприятные дни" :v="currentRule.good_days.join(', ')"
+            tone="good"
+          />
+          <UiKv
+            v-if="currentRule.avoid_days?.length"
+            k="Избегаемые дни" :v="currentRule.avoid_days.join(', ')"
+            tone="bad"
+          />
+          <UiDisclaimer>
+            Модель учитывает накшатру, титхи, день недели, йогу и тара-балу при наличии профиля. Титхи,
+            записанные словом («Амавасья», «Пурнима»), и категория «гандантовые»
+            тоже учитываются. Оговорку «по ряду школ» модель не различает —
+            такая запись считается обычным совпадением, поэтому список стоит
+            сверить глазами.
+          </UiDisclaimer>
+          <div class="pd-notes">
+            <UiMethodNote id="Б2" />
+            <UiMethodNote id="Б3" />
+          </div>
+          <UiDisclaimer :entry="disclaimer('events-muhurta')" />
 
           <template v-if="selectedKalamItems.length">
             <div class="pd-subhead">В какие часы этого дня не начинать</div>
@@ -890,7 +879,7 @@ const updatedLabel = computed(() =>
             <UiMethodNote id="А4" />
           </template>
 
-          <UiProOnly v-if="currentRule">
+          <UiProOnly>
             <div class="pd-subhead">Что проверить астрологу вручную</div>
             <UiReasonList
               :items="(currentRule.advisor || []).map((textItem) => ({ text: textItem, tone: 'info' }))"
@@ -909,10 +898,10 @@ const updatedLabel = computed(() =>
           <div>
             <h2 class="card__title">Дни диапазона</h2>
             <div class="card__sub">
-              {{ currentRule ? 'Оценка каждого дня на восходе' : 'Окна времени по доступным правилам' }}
+              Оценка каждого дня на восходе
             </div>
           </div>
-          <div v-if="currentRule" class="pd-sort" role="group" aria-label="Сортировка">
+          <div class="pd-sort" role="group" aria-label="Сортировка">
             <button
               type="button" :class="{ 'is-on': sortBy === 'score' }"
               :aria-pressed="sortBy === 'score'" @click="sortBy = 'score'"
@@ -932,7 +921,7 @@ const updatedLabel = computed(() =>
           <p v-else-if="windowGoal.taras && !timeCandidates.length">Для подбора времени нужны данные о накшатре рождения.</p>
           <p v-else-if="windowLoading" role="status">Подбираем время в выбранных датах…</p>
           <p v-else-if="windowError" role="alert">{{ windowError }} <UiButton @click="retryWindows++">Повторить</UiButton></p>
-          <p v-else class="pd-window-note">До трёх диапазонов на дату {{ windowGoal.taras ? 'по Тара-бале и факторам времени' : 'для обзора общих условий' }}. <template v-if="currentRule">Оценка даты на восходе показана отдельно. </template>Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
+          <p v-else class="pd-window-note">До трёх диапазонов на дату {{ windowGoal.taras ? 'по Тара-бале и факторам времени' : 'для обзора общих условий' }}. Оценка даты на восходе показана отдельно. Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
         </template>
         <div class="pd-list">
           <div v-for="r in sortedRows" :key="r.iso" class="pd-result-day">
@@ -942,7 +931,7 @@ const updatedLabel = computed(() =>
             :class="{
               'is-best': bestIsos.has(r.iso),
               'is-sel': r.iso === selectedIso,
-              'is-dead': currentRule && !r.score,
+              'is-dead': !r.score,
             }"
             :aria-pressed="r.iso === selectedIso"
             @click="selectedIso = r.iso"
@@ -1007,7 +996,7 @@ const updatedLabel = computed(() =>
         </div>
       </UiCard>
 
-      <UiNoteBar v-if="currentRule" :updated="updatedLabel">
+      <UiNoteBar :updated="updatedLabel">
         Подбор построен на двух запросах к расчёту — транзиты Луны по накшатрам
         и данные панчанги за весь период {{ fmtDate(noonOf(from)) }} — {{ fmtDate(noonOf(to)) }}
         для места «{{ place.city }}» — и весовой модели школы из справочника
@@ -1016,7 +1005,7 @@ const updatedLabel = computed(() =>
           фактор тара-балы отключён — джанма-накшатра неизвестна</template>.
       </UiNoteBar>
 
-      <UiDisclaimer v-if="currentRule">
+      <UiDisclaimer>
         Итог — <b>оценка дня, а не разрешение или запрет</b>. «Слабое окно»
         традиция читает как повод отнестись внимательнее и выбрать хороший час,
         а не как причину отменить дело. Точный расчёт под конкретное событие,
