@@ -4,7 +4,7 @@
 //
 // Источники данных:
 //   POST /api/calendar  → транзиты Луны по накшатрам за весь диапазон
-//   POST /api/panchang  → титхи за весь диапазон + восход/закат каждых суток
+//   POST /api/panchang  → титхи, йоги, караны и восход/закат за весь диапазон
 //   calculators/event-picker.ts (через useJyotish, лениво) → scoreEvent/listEvents
 //   utils/kalam.ts → Раху / Гулика / Ямаганда выбранного дня
 //
@@ -13,9 +13,7 @@
 // по ключу «диапазон + место»: смена события пересчитывает баллы локально,
 // без похода в сеть.
 //
-// ЧЕГО ЗДЕСЬ НЕТ И БЫТЬ НЕ ДОЛЖНО: «энергии дня», рейтингов по сферам, даш.
-// Йогу и карану API не считает — фактор йоги (вес 1) в модели просто не
-// участвует, и об этом сказано прямо, а не подменяется выдумкой.
+// Нитья-йога оценивается на восходе. Бхадра и каламы описывают интервалы внутри суток.
 import {
   useJyotish, listEvents, scoreEvent, splitTithi, weekdayRu,
 } from '~/composables/useJyotish'
@@ -44,7 +42,18 @@ interface ApiDay {
   dt_sunset: string
   day_dur_h: number
 }
-interface ApiPanchang { tithis: ApiTithi[]; days: ApiDay[] }
+interface ApiInterval {
+  name: string
+  dt_start: string
+  dt_end: string
+}
+interface ApiKarana extends ApiInterval { is_bhadra: boolean }
+interface ApiPanchang {
+  tithis: ApiTithi[]
+  yogas?: ApiInterval[]
+  karanas?: ApiKarana[]
+  days: ApiDay[]
+}
 interface ApiNakTransit {
   nk_num: number       // 1..27
   name: string
@@ -207,6 +216,7 @@ const error = ref('')
 const loadedAt = ref<Date | null>(null)
 /** Ключ загруженных данных: пока он совпадает с текущим, в сеть не ходим. */
 const loadedKey = ref('')
+let loadToken = 0
 const dataKey = computed(() => [
   from.value, to.value, place.value.lat, place.value.lon, place.value.tz,
 ].join('|'))
@@ -215,13 +225,13 @@ async function load(force = false) {
   if (rangeError.value) return
   const key = dataKey.value
   if (!force && key === loadedKey.value && panchang.value) return
+  const token = ++loadToken
   loading.value = true
   error.value = ''
   const pl = place.value
-  // date_end берём на сутки дальше конца диапазона: иначе API обрежет dt_end
-  // последней титхи/накшатры на 23:59:59 и подпись «до …» стала бы неправдой.
+  // Соседние сутки нужны для полных границ интервалов на краях диапазона.
   const body = {
-    date_start: from.value,
+    date_start: toIso(addDays(noonOf(from.value), -1)),
     date_end: toIso(addDays(noonOf(to.value), 1)),
     tz: pl.tz, lat: pl.lat, lon: pl.lon,
   }
@@ -230,17 +240,19 @@ async function load(force = false) {
       api.post<ApiPanchang>('/api/panchang', body),
       api.post<ApiNakTransit[]>('/api/calendar', body),
     ])
+    if (token !== loadToken || key !== dataKey.value) return
     panchang.value = p
     transits.value = Array.isArray(t) ? t : []
     loadedKey.value = key
     loadedAt.value = new Date()
   } catch (e) {
+    if (token !== loadToken || key !== dataKey.value) return
     error.value = e instanceof Error ? e.message : String(e)
     panchang.value = null
     transits.value = null
     loadedKey.value = ''
   } finally {
-    loading.value = false
+    if (token === loadToken) loading.value = false
   }
 }
 
@@ -269,6 +281,9 @@ interface DayRow {
   /** Накшатра, на которую произойдёт смена в течение суток (если есть). */
   nakNext: ApiNakTransit | null
   tithi: ApiTithi | null
+  yoga: ApiInterval | null
+  bhadra: ApiKarana[]
+  scoreTime: string
   tithiNo: number
   paksha: Paksha
   score: EventScoreResult | null
@@ -277,14 +292,13 @@ interface DayRow {
 }
 
 /** Элемент, действующий на восходе, — так титхи и накшатру и относят к суткам. */
-function activeAt<T extends { dt_start: string; dt_end: string }>(list: T[], t: Date): T | null {
-  return list.find((x) => at(x.dt_start) <= t && t < at(x.dt_end)) ?? null
+function activeAt<T extends { dt_start: string; dt_end: string }>(list: T[], stamp: string): T | null {
+  return list.find((x) => x.dt_start <= stamp && stamp < x.dt_end) ?? null
 }
-/** Следующий по времени элемент, начинающийся до конца этих суток. */
 function nextWithin<T extends { dt_start: string; dt_end: string }>(
-  list: T[], after: Date, dayEnd: Date,
+  list: T[], after: string, dayEnd: string,
 ): T | null {
-  return list.find((x) => at(x.dt_start) > after && at(x.dt_start) < dayEnd) ?? null
+  return list.find((x) => x.dt_start > after && x.dt_start < dayEnd) ?? null
 }
 
 const rows = ref<DayRow[]>([])
@@ -296,11 +310,16 @@ async function recompute() {
   const p = panchang.value
   const t = transits.value
   const ev = eventId.value
-  if (!p || !t || !ev) { rows.value = []; return }
   const token = ++runToken
+  if (!p || !t || !ev || loadedKey.value !== dataKey.value) {
+    rows.value = []
+    scoring.value = false
+    return
+  }
   scoring.value = true
 
   const janma = janmaNakshatra.value ?? undefined
+  const bhadra = (p.karanas ?? []).filter(interval => interval.is_bhadra && interval.dt_start < interval.dt_end)
   const inRange = p.days.filter((d) => d.date >= from.value && d.date <= to.value)
 
   const built = await Promise.all(inRange.map(async (d): Promise<DayRow> => {
@@ -308,8 +327,9 @@ async function recompute() {
     const weekday = weekdayRu(date)
     const sunrise = d.dt_sunrise ? at(d.dt_sunrise) : null
     const sunset = d.dt_sunset ? at(d.dt_sunset) : null
-    const dayEnd = new Date(`${d.date}T23:59:59`)
-    const mark = sunrise ?? new Date(`${d.date}T06:00:00`)
+    const dayStart = `${d.date}T00:00:00`
+    const dayEnd = `${toIso(addDays(date, 1))}T00:00:00`
+    const mark = d.dt_sunrise || `${d.date}T06:00:00`
 
     const nak = activeAt(t, mark)
     const tithi = activeAt(p.tithis, mark)
@@ -318,6 +338,9 @@ async function recompute() {
       nak,
       nakNext: nak ? nextWithin(t, mark, dayEnd) : null,
       tithi,
+      yoga: activeAt(p.yogas ?? [], mark),
+      bhadra: bhadra.filter(interval => interval.dt_start < dayEnd && interval.dt_end > dayStart),
+      scoreTime: new Date(Math.ceil(Date.parse(mark + 'Z') / 60000) * 60000).toISOString().slice(11, 16),
       tithiNo: 0,
       paksha: 'shukla',
       score: null,
@@ -333,8 +356,6 @@ async function recompute() {
     const split = splitTithi(tithi.num)
     base.tithiNo = split.tithi
     base.paksha = split.paksha
-    // yogaName не передаём: нитья-йогу API не считает, фактор (вес 1)
-    // в знаменатель не попадёт — так честнее, чем подставлять пустую строку.
     base.score = await scoreEvent({
       eventId: ev,
       janmaNo: janma,
@@ -342,6 +363,7 @@ async function recompute() {
       weekday,
       tithi: split.tithi,
       paksha: split.paksha,
+      yogaName: base.yoga?.name,
     })
     if (!base.score) base.problem = 'модель не смогла оценить эти сутки'
     return base
@@ -352,7 +374,7 @@ async function recompute() {
   scoring.value = false
 }
 
-watch([panchang, transits, eventId, janmaNakshatra], () => { recompute() })
+watch([panchang, transits, eventId, janmaNakshatra, dataKey], () => { recompute() })
 
 // ─── Сортировка, сводка, выбор дня ──────────────────────────────────────────
 
@@ -458,6 +480,22 @@ function tithiLabel(r: DayRow) {
 }
 
 // ─── Разбор выбранного дня ──────────────────────────────────────────────────
+
+const panchangaLink = computed(() => {
+  const row = selected.value
+  if (!row) return ''
+  const { city, lat, lon, tz } = place.value
+  const params = new URLSearchParams({
+    date: row.iso, time: row.scoreTime, city,
+    lat: String(lat), lon: String(lon), tz: String(tz), mode: 'apparent',
+  })
+  return '/panchang-day-v2?' + params.toString()
+})
+
+function bhadraTime(stamp: string, date: string) {
+  const time = stamp.slice(11, 19)
+  return stamp.slice(0, 10) === date ? time : `${stamp.slice(8, 10)}.${stamp.slice(5, 7)} ${time}`
+}
 
 const KALAM_ICON: Record<KalamKey, 'alert' | 'warn' | 'info'> = {
   rahu: 'alert', gulika: 'warn', yamaganda: 'info',
@@ -658,11 +696,8 @@ const updatedLabel = computed(() =>
         <UiDisclaimer tone="warn" :entry="disclaimer('event-picker')" />
 
         <UiDisclaimer>
-          В оценку <b>не входят</b> нитья-йога и карана: сервис их не считает,
-          поэтому фактор йоги (вес 1) в модели не участвует, а стоп-фактор Бхадра
-          (Вишти-карана) не виден. Дневные каламы (Раху / Гулика / Ямаганда) на
-          балл дня тоже не влияют — это выбор <i>часа</i>, а не дня; они показаны
-          в разборе выбранного дня ниже.
+          В оценке дня участвует нитья-йога на восходе. Бхадра (Вишти-карана) и
+          дневные каламы показаны отдельными интервалами для выбора часа.
         </UiDisclaimer>
       </UiCard>
 
@@ -673,6 +708,17 @@ const updatedLabel = computed(() =>
           :title="`${fmtDate(selected.date)}, ${selected.weekday.toLowerCase()}`"
           :subtitle="currentEvent.name"
         >
+          <NuxtLink :to="panchangaLink" class="btn btn--ghost">
+            <UiIcon name="calendar" style="width:15px;height:15px" />
+            Открыть день в Панчанге
+          </NuxtLink>
+          <UiDisclaimer v-if="selected.bhadra.length" tone="warn">
+            <b>Бхадра (Вишти-карана)</b>
+            <p v-for="interval in selected.bhadra" :key="interval.dt_start">
+              {{ bhadraTime(interval.dt_start, selected.iso) }}–{{ bhadraTime(interval.dt_end, selected.iso) }}
+            </p>
+            В традиции это стоп-фактор для начала дела в указанное время. Балл всего дня рассчитывается отдельно.
+          </UiDisclaimer>
           <template v-if="selected.score">
             <UiVerdict
               :score="`${selected.score.pct}%`"
@@ -683,6 +729,7 @@ const updatedLabel = computed(() =>
                 Накшатра на восходе — {{ selected.nak?.ru }} (№ {{ selected.nak?.nk_num }},
                 управитель {{ selected.nak?.lord }}), титхи — {{ tithiLabel(selected) }}
                 ({{ PAKSHA_RU[selected.paksha] }} половина).
+                <template v-if="selected.yoga">Йога — {{ selected.yoga.name }}.</template>
                 <template v-if="selected.nakNext">
                   В {{ fmtTime(at(selected.nakNext.dt_start)) }} Луна перейдёт
                   в {{ selected.nakNext.ru }} — оценка дня считается по накшатре
@@ -726,7 +773,7 @@ const updatedLabel = computed(() =>
               />
               <UiKv
                 k="Факторы в знаменателе"
-                :v="`${selected.score.lines.length} из 5 (йога не считается сервисом)`"
+                :v="`${selected.score.lines.length} из 5`"
               />
             </UiProOnly>
           </template>
@@ -771,7 +818,7 @@ const updatedLabel = computed(() =>
             tone="bad"
           />
           <UiDisclaimer>
-            Баллы модель ставит по накшатре, номеру титхи и дню недели; титхи,
+            Модель учитывает накшатру, титхи, день недели, йогу и тара-балу при наличии профиля. Титхи,
             записанные словом («Амавасья», «Пурнима»), и категория «гандантовые»
             тоже учитываются. Оговорку «по ряду школ» модель не различает —
             такая запись считается обычным совпадением, поэтому список стоит
@@ -852,6 +899,7 @@ const updatedLabel = computed(() =>
             <span class="pd-row__astro">
               <span class="pd-row__nak">{{ r.nak?.ru ?? '—' }}</span>
               <span class="pd-row__tithi">{{ tithiLabel(r) }}</span>
+              <UiChip v-if="r.bhadra.length" variant="bad">Бхадра</UiChip>
             </span>
 
             <template v-if="r.score">
@@ -893,12 +941,11 @@ const updatedLabel = computed(() =>
 
       <UiNoteBar :updated="updatedLabel">
         Подбор построен на двух запросах к расчёту — транзиты Луны по накшатрам
-        и титхи за весь период {{ fmtDate(noonOf(from)) }} — {{ fmtDate(noonOf(to)) }}
+        и данные панчанги за весь период {{ fmtDate(noonOf(from)) }} — {{ fmtDate(noonOf(to)) }}
         для места «{{ place.city }}» — и весовой модели школы из справочника
         мухурты<template v-if="janmaNakshatra">, включая тара-балу от вашей
           джанма-накшатры ({{ janmaNakshatraName }})</template><template v-else>;
           фактор тара-балы отключён — джанма-накшатра неизвестна</template>.
-        Йога и карана в расчёт не входят.
       </UiNoteBar>
 
       <UiDisclaimer>

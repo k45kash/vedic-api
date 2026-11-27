@@ -204,10 +204,10 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
   // 5. Йога дня (только бонус — отсутствие в списке не штрафуется)
   if (input.yogaName && input.yogaName.trim()) {
     total += WEIGHTS.yoga
-    const y = input.yogaName.trim().toLowerCase()
-    const gy = (ev.good_yogas || []).some(
-      (x) => x.toLowerCase().includes(y) || y.includes(x.toLowerCase()),
-    )
+    const normalize = (name: string) => name.trim().toLowerCase()
+      .replace(/\s*\([^)]*\)$/, '').replace(/[-– ]йога$/, '').trim()
+    const name = normalize(input.yogaName)
+    const gy = (ev.good_yogas || []).some(entry => normalize(entry) === name)
     if (gy) {
       gained += WEIGHTS.yoga
       lines.push({ sign: '+', weight: WEIGHTS.yoga, text: `Йога «${input.yogaName}» — в числе благоприятных` })

@@ -484,3 +484,18 @@ def test_секции_дисклеймеров_не_дублируются(ко�
     секции = [s["section"] for s in контент("disclaimers.json")["sections"]]
     дубли = sorted({s for s in секции if секции.count(s) > 1})
     assert not дубли, дубли
+
+
+def test_event_scoring_uses_daily_yoga_exactly(tmp_path):
+    result = run_ts("""
+    const { scoreEvent } = await import(FE + 'calculators/event-picker.ts')
+    const input = {eventId: 'wedding', weekday: 'Пятница'}
+    const neutral = scoreEvent(input)
+    const good = scoreEvent({...input, yogaName: 'Прити'})
+    const partial = scoreEvent({...input, yogaName: 'Атиприти'})
+    out({neutral, good, partial})
+    """, tmp_path)
+
+    assert result["good"]["total"] == result["neutral"]["total"] + 1
+    assert result["good"]["gained"] == result["neutral"]["gained"] + 1
+    assert result["partial"]["gained"] == result["neutral"]["gained"]
