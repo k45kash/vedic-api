@@ -6,7 +6,7 @@ import tithis from '~content/tithi.json'
 import { ApiError } from '~/composables/useApi'
 import { nakName, taraFor } from '~/composables/useJyotish'
 import {
-  explainMissingTaraWindow, findTaraWindows, isWednesdayAbhijit, parseTaraDate as ms, TARA_FACTOR_LABELS, TARA_GOAL_GROUPS, TARA_GOALS,
+  EVENT_GOAL_GROUPS, eventRuleForGoal, explainMissingTaraWindow, findEventGoal, findTaraWindows, isWednesdayAbhijit, parseTaraDate as ms, TARA_FACTOR_LABELS,
   TARA_TIMING_LABELS, type TaraTiming, type TaraTimeline,
 } from '~/calculators/tara-windows'
 
@@ -87,6 +87,12 @@ const shareQuery = computed(() => ({
 async function share() {
   const url = new URL('/panchang-day-v2', window.location.origin)
   url.search = new URLSearchParams(shareQuery.value).toString()
+  if (requested.goal !== undefined || goalId.value !== defaultGoal.id || checkSelectedTime.value) {
+    url.searchParams.set('goal', goalId.value)
+    url.searchParams.set('duration', String(eventDuration.value))
+    url.searchParams.set('timing', timing.value)
+    if (checkSelectedTime.value) url.searchParams.set('check', '1')
+  }
   shareUrl.value = url.href
   try {
     await navigator.clipboard.writeText(url.href)
@@ -372,9 +378,11 @@ const overlaps = computed(() => abhijitComparison.value.flatMap(item => item.ove
 const hasWednesdayAbhijit = computed(() => abhijitComparison.value.some(({ abhijit }) =>
   isWednesdayAbhijit(abhijit, timeline.value?.rows.vara ?? []),
 ))
-const initialGoal = TARA_GOALS.find(goal => goal.id === requested.goal) ?? TARA_GOALS[0]
+const defaultGoal = findEventGoal('meetings')!
+const initialGoal = findEventGoal(requested.goal) ?? defaultGoal
 const goalId = ref(initialGoal.id)
-const selectedGoal = computed(() => TARA_GOALS.find(goal => goal.id === goalId.value) ?? TARA_GOALS[0])
+const selectedGoal = computed(() => findEventGoal(goalId.value) ?? defaultGoal)
+const eventRule = computed(() => eventRuleForGoal(selectedGoal.value))
 const initialDuration = typeof requested.duration === 'string' ? Number(requested.duration) : NaN
 const eventDuration = ref(Number.isInteger(initialDuration) && initialDuration >= 1 && initialDuration <= 1500 ? initialDuration : selectedGoal.value.minutes)
 const timing = ref<TaraTiming>(requested.timing === 'start' || requested.timing === 'whole' ? requested.timing : selectedGoal.value.timing)
@@ -382,18 +390,20 @@ watch(selectedGoal, goal => {
   timing.value = goal.timing
   eventDuration.value = goal.minutes
 })
-const checkSelectedTime = ref(false)
+const checkSelectedTime = ref(requested.check === '1')
+watch([goalId, eventDuration, timing, checkSelectedTime], () => { shareUrl.value = ''; sharedStatus.value = '' })
 const windowDay = computed(() => ({ start: windowStart.value, end: windowStart.value + dayMinutes.value * 60000 }))
+const timeCandidates = computed(() => moonUncertainReason.value === 'boundary' ? [] : moonNakshatraCandidates.value)
 const windowChoices = computed(() => {
   const rows = timeline.value?.rows
-  if (!rows || moonUncertainReason.value === 'boundary') return []
+  if (!rows) return []
   return findTaraWindows(
-    windowDay.value, rows, moonNakshatraCandidates.value, selectedGoal.value, eventDuration.value, timing.value,
+    windowDay.value, rows, timeCandidates.value, selectedGoal.value, eventDuration.value, timing.value,
     checkSelectedTime.value ? instant.value : undefined,
   )
 })
 const emptyWindowReason = computed(() => timeline.value
-  ? explainMissingTaraWindow(windowDay.value, timeline.value.rows, moonNakshatraCandidates.value, selectedGoal.value, eventDuration.value, timing.value)
+  ? explainMissingTaraWindow(windowDay.value, timeline.value.rows, timeCandidates.value, selectedGoal.value, eventDuration.value, timing.value)
   : '')
 function windowClock(epoch: number) {
   const stamp = localStamp(epoch)
@@ -567,8 +577,8 @@ const karakas = computed(() => {
       <details class="panel calculation-note time-picker" :open="requested.goal !== undefined || undefined">
         <summary>Подобрать время внутри дня</summary>
         <div class="picker-controls">
-          <label>Цель <select v-model="goalId">
-            <optgroup v-for="group in TARA_GOAL_GROUPS" :key="group.label" :label="group.label">
+          <label>Событие <select v-model="goalId">
+            <optgroup v-for="group in EVENT_GOAL_GROUPS" :key="group.label" :label="group.label">
               <option v-for="goal in group.goals" :key="goal.id" :value="goal.id">{{ goal.label }}</option>
             </optgroup>
           </select></label>
@@ -580,29 +590,31 @@ const karakas = computed(() => {
           </label>
         </div>
         <label class="check-time"><input type="checkbox" v-model="checkSelectedTime"> Проверить выбранное время · {{ clock }}</label>
-        <p>Тара, Раху-кала, Бхадра и предупреждения школы проверяются {{ timing === 'start' ? 'в момент начала' : 'на протяжении всего события' }}. Смена Абхиджит сама по себе не ограничивает диапазон старта.</p>
+        <p>Факторы события, Раху-кала, Бхадра и предупреждения школы проверяются {{ timing === 'start' ? 'в момент начала' : 'на протяжении всего события' }}. Смена Абхиджит сама по себе не ограничивает диапазон старта.</p>
         <p v-if="moonUncertainReason === 'time-unknown' && selectedGoal.taras">Подходящая для цели тара нужна при каждом возможном варианте накшатры рождения.</p>
         <TaraGoalCoverage :goal="selectedGoal" />
-        <p v-if="!hasProfile">Для подбора по Тара-бале укажите <NuxtLink to="/me">данные рождения</NuxtLink>.</p>
-        <p v-else-if="birthLoading">Рассчитываем накшатру рождения…</p>
+        <p v-if="selectedGoal.taras && !hasProfile">Для подбора по Тара-бале укажите <NuxtLink to="/me">данные рождения</NuxtLink>.</p>
+        <p v-else-if="selectedGoal.taras && birthLoading">Рассчитываем накшатру рождения…</p>
         <p v-else-if="!timeline.rows.vara.length">Подбор недоступен без расчёта цикла восхода и заката.</p>
-        <p v-else-if="moonUncertainReason === 'boundary'">Накшатра рождения пограничная. Уточните её в <NuxtLink to="/me">профиле</NuxtLink>.</p>
-        <p v-else-if="!taraTrack.length">Нет данных для подбора по Тара-бале.</p>
+        <p v-else-if="selectedGoal.taras && moonUncertainReason === 'boundary'">Накшатра рождения пограничная. Уточните её в <NuxtLink to="/me">профиле</NuxtLink>.</p>
+        <p v-else-if="selectedGoal.taras && !timeCandidates.length">Нет данных для подбора по Тара-бале.</p>
         <p v-else-if="!Number.isInteger(eventDuration) || eventDuration < 1 || eventDuration > dayMinutes">Укажите целое число минут в пределах выбранных суток.</p>
         <ul v-else-if="windowChoices.length">
           <li v-for="choice in windowChoices" :key="choice.firstStart">
             <div>
-              <strong>{{ checkSelectedTime ? 'Проверка на' : selectedGoal.taras ? 'Начать' : 'Обзор стартов' }} {{ windowClock(choice.firstStart) }}<template v-if="choice.lastStart !== choice.firstStart">–{{ windowClock(choice.lastStart) }}</template></strong>
-              <p>{{ choice.names.join(' / ') }}<template v-if="choice.fits === true"> · {{ selectedGoal.reason }}</template></p>
+              <strong>{{ checkSelectedTime ? 'Проверка на' : (selectedGoal.taras || eventRule) ? 'Начать' : 'Обзор стартов' }} {{ windowClock(choice.firstStart) }}<template v-if="choice.lastStart !== choice.firstStart">–{{ windowClock(choice.lastStart) }}</template></strong>
+              <p v-if="choice.names.length">{{ choice.names.join(' / ') }}<template v-if="choice.fits === true"> · {{ selectedGoal.reason }}</template></p>
               <p v-if="checkSelectedTime && choice.fits === false" class="school-warning">Тара-бала не соответствует ориентиру для этой цели в выбранном режиме.</p>
+              <p v-if="choice.nakshatraRule" :class="{ 'school-warning': choice.nakshatraRule.sign === '⛔' }">{{ choice.nakshatraRule.text }}</p>
+              <p v-if="choice.weekdayRule" :class="{ 'school-warning': choice.weekdayRule.sign === '−' }">{{ choice.weekdayRule.text }}</p>
               <p v-if="choice.tithi && !choice.tithiRule">{{ choice.tithi }}</p>
               <p v-if="choice.yoga">{{ choice.yoga }}</p>
-              <p v-if="choice.tithiRule" :class="{ 'school-warning': choice.tithiRule.sign === '−' || choice.veto }">
-                <template v-if="choice.tithi && timing === 'whole' && (choice.veto || choice.tithiRank < 0)">{{ choice.tithi }} на старте. В течение события · </template>{{ choice.tithiRule.text }}
+              <p v-if="choice.tithiRule" :class="{ 'school-warning': choice.tithiRule.sign === '−' || choice.tithiRule.sign === '⛔' }">
+                <template v-if="choice.tithi && timing === 'whole' && (choice.tithiRule.sign === '⛔' || choice.tithiRank < 0)">{{ choice.tithi }} на старте. В течение события · </template>{{ choice.tithiRule.text }}
               </p>
               <p v-if="choice.yogaBonus">Благоприятная йога по справочнику события {{ timing === 'start' ? 'на момент начала' : 'на всей длительности' }}.</p>
               <p v-if="!choice.tithi || !choice.yoga">На момент начала получены неполные данные титхи или йоги.</p>
-              <p v-if="checkSelectedTime && !choice.caution">Предупреждений по проверяемым факторам нет.</p>
+              <p v-if="checkSelectedTime && !choice.caution && choice.fits !== false">Предупреждений по проверяемым факторам нет.</p>
               <p v-if="choice.beginsInAbhijit">{{ checkSelectedTime ? 'Выбранное время приходится на Абхиджит.' : 'Первый старт приходится на Абхиджит.' }}</p>
               <p v-for="flag in choice.warnings" :key="flag" class="school-warning">
                 {{ TARA_FACTOR_LABELS[flag] }}<template v-if="flag === 'wednesday'"> · по курсу лучше отложить важное начинание</template>

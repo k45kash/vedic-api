@@ -15,14 +15,14 @@
 //
 // Нитья-йога оценивается на восходе. Бхадра и каламы описывают интервалы внутри суток.
 import {
-  useJyotish, listEvents, scoreEvent, splitTithi, weekdayRu,
+  useJyotish, scoreEvent, splitTithi, weekdayRu,
 } from '~/composables/useJyotish'
 import type {
-  EventDef, EventScoreResult, EventVerdictLevel, Paksha, ScoreLine, WeekdayRu,
+  EventScoreResult, EventVerdictLevel, Paksha, ScoreLine, WeekdayRu,
 } from '~/composables/useJyotish'
 import { dayKalams, type KalamKey, type KalamPeriod } from '~/utils/kalam'
 import {
-  explainMissingTaraWindow, findTaraWindows, TARA_FACTOR_LABELS, TARA_GOAL_GROUPS, TARA_GOALS, TARA_TIMING_LABELS,
+  EVENT_GOAL_GROUPS, eventRuleForGoal, explainMissingTaraWindow, findEventGoal, findTaraWindows, TARA_FACTOR_LABELS, TARA_TIMING_LABELS,
   type TaraTimeline, type TaraTiming, type TaraWindow,
 } from '~/calculators/tara-windows'
 
@@ -110,23 +110,6 @@ function plural(n: number, one: string, few: string, many: string) {
   return many
 }
 
-// ─── Группировка 33 событий ────────────────────────────────────────────────
-// В events_muhurta.json категорий нет — только id / label / name / icon.
-// Поэтому группы заданы здесь, по смыслу дела. Любое событие, не попавшее
-// в список, уедет в «Прочее»: экран не должен молча терять пункты, если
-// в справочник добавят новое дело.
-
-const EVENT_GROUPS: Array<{ title: string; ids: string[] }> = [
-  { title: 'Семья и дом', ids: ['wedding', 'house', 'namakarana', 'conception', 'construction', 'renovation'] },
-  { title: 'Дело и деньги', ids: ['business', 'newproject', 'factory', 'contract', 'finance', 'court', 'conflict', 'sell_stuff'] },
-  { title: 'Покупки', ids: ['vehicle', 'buy_electronics', 'buy_clothes'] },
-  { title: 'Учёба и творчество', ids: ['education', 'creative'] },
-  { title: 'Дорога и отдых', ids: ['travel', 'rest', 'sport'] },
-  { title: 'Тело и здоровье', ids: ['medical', 'haircut', 'cosmetic', 'bodycare'] },
-  { title: 'Духовная практика', ids: ['spiritual', 'sadhana', 'tapas'] },
-  { title: 'Быт и природа', ids: ['cleaning', 'planting', 'aquarium', 'pet_care'] },
-]
-
 // ─── Состояние ──────────────────────────────────────────────────────────────
 
 const api = useApi()
@@ -155,61 +138,28 @@ const place = computed(() => {
 })
 
 // Событие
-const events = ref<EventDef[]>([])
 const eventId = ref('wedding')
-const goalId = ref('')
-const eventDuration = ref(30)
-const timing = ref<TaraTiming>('whole')
-const windowGoal = computed(() => TARA_GOALS.find(goal => goal.id === goalId.value))
-const eventGoals: Record<string, string> = {
-  contract: 'contract', business: 'contract', newproject: 'project', factory: 'project',
-  construction: 'project', renovation: 'renovation', education: 'study', cleaning: 'completion',
-  travel: 'departure', haircut: 'hair', cosmetic: 'beauty-care', bodycare: 'spa',
-}
-watch(eventId, event => { goalId.value = eventGoals[event] ?? '' })
-watch(windowGoal, goal => {
-  if (!goal) return
-  timing.value = goal.timing
-  eventDuration.value = goal.minutes
+const events = EVENT_GOAL_GROUPS.flatMap(group => group.goals)
+const currentEvent = computed(() => findEventGoal(eventId.value))
+const currentRule = computed(() => currentEvent.value && eventRuleForGoal(currentEvent.value))
+const showWindows = ref(false)
+const eventDuration = ref(currentEvent.value?.minutes ?? 30)
+const timing = ref<TaraTiming>(currentEvent.value?.timing ?? 'start')
+const windowGoal = computed(() => showWindows.value || !currentRule.value ? currentEvent.value : undefined)
+watch(currentEvent, event => {
+  if (!event) return
+  timing.value = event.timing
+  eventDuration.value = event.minutes
 })
 const durationValid = computed(() => Number.isInteger(eventDuration.value) && eventDuration.value >= 1 && eventDuration.value <= 1440)
 const query = ref('')
-const currentEvent = computed<EventDef | null>(
-  () => events.value.find((e) => e.id === eventId.value) ?? null,
-)
-
-/** Короткая подпись события для чипа.
- * В справочнике два разных дела носят один и тот же label («Садхана» —
- * это и spiritual, и sadhana). Трогать content/ нельзя, поэтому неуникальные
- * подписи заменяем полным name — иначе в списке стоят две одинаковые кнопки. */
-const eventLabel = computed(() => {
-  const seen = new Map<string, number>()
-  for (const e of events.value) seen.set(e.label, (seen.get(e.label) ?? 0) + 1)
-  return (e: EventDef) => ((seen.get(e.label) ?? 0) > 1 ? e.name : e.label)
-})
-
 const groupedEvents = computed(() => {
-  const all = events.value
-  if (!all.length) return []
   const q = query.value.trim().toLowerCase()
-  const match = (e: EventDef) => !q
-    || e.label.toLowerCase().includes(q)
-    || e.name.toLowerCase().includes(q)
-  const taken = new Set<string>()
-  const out: Array<{ title: string; items: EventDef[] }> = []
-  for (const g of EVENT_GROUPS) {
-    const items: EventDef[] = []
-    for (const id of g.ids) {
-      const e = all.find((x) => x.id === id)
-      if (!e) continue
-      taken.add(id)
-      if (match(e)) items.push(e)
-    }
-    if (items.length) out.push({ title: g.title, items })
-  }
-  const rest = all.filter((e) => !taken.has(e.id) && match(e))
-  if (rest.length) out.push({ title: 'Прочее', items: rest })
-  return out
+  return EVENT_GOAL_GROUPS.map(group => ({
+    ...group,
+    goals: group.goals.filter(event => !q || event.label.toLowerCase().includes(q)
+      || eventRuleForGoal(event)?.name.toLowerCase().includes(q)),
+  })).filter(group => group.goals.length)
 })
 
 // Диапазон дат
@@ -249,8 +199,9 @@ const windowTimelineKey = ref('')
 const windowLoading = ref(false)
 const windowError = ref('')
 const retryWindows = ref(0)
-const canCalculateWindows = computed(() => Boolean(windowGoal.value && hasProfile.value &&
-  moonNakshatraCandidates.value.length && moonUncertainReason.value !== 'boundary' && !rangeError.value))
+const timeCandidates = computed(() => moonUncertainReason.value === 'boundary' ? [] : moonNakshatraCandidates.value)
+const canCalculateWindows = computed(() => Boolean(windowGoal.value && !rangeError.value &&
+  (!windowGoal.value.taras || timeCandidates.value.length)))
 
 watch([dataKey, canCalculateWindows, retryWindows], async ([key, enabled], _, cleanup) => {
   windowLoading.value = false
@@ -314,10 +265,6 @@ onMounted(() => {
   // Гороскоп нужен только ради джанма-накшатры (фактор тары, вес 4).
   // Без профиля вернёт null — подбор продолжит работать без этого фактора.
   fetchHoroscope()
-  listEvents().then((list) => {
-    events.value = list
-    if (!list.some((e) => e.id === eventId.value)) eventId.value = list[0]?.id ?? ''
-  })
   load()
 })
 
@@ -363,9 +310,9 @@ let runToken = 0
 async function recompute() {
   const p = panchang.value
   const t = transits.value
-  const ev = eventId.value
+  const rule = currentRule.value
   const token = ++runToken
-  if (!p || !t || !ev || loadedKey.value !== dataKey.value) {
+  if (!p || !t || !currentEvent.value || loadedKey.value !== dataKey.value) {
     rows.value = []
     scoring.value = false
     return
@@ -410,8 +357,12 @@ async function recompute() {
     const split = splitTithi(tithi.num)
     base.tithiNo = split.tithi
     base.paksha = split.paksha
+    if (!rule) {
+      base.problem = 'Нет методики оценки дня'
+      return base
+    }
     base.score = await scoreEvent({
-      eventId: ev,
+      eventId: rule.id,
       janmaNo: janma,
       dayNakNo: nak.nk_num,
       weekday,
@@ -544,7 +495,7 @@ const windowsByDate = computed<Record<string, { choices: TaraWindow[]; emptyReas
     const start = Date.parse(row.iso + 'T00:00Z')
     const end = start + 86400000
     const day = { start, end }
-    const candidates = moonNakshatraCandidates.value
+    const candidates = timeCandidates.value
     const choices = findTaraWindows(day, timeline, candidates, goal, eventDuration.value, timing.value).slice(0, 3)
     return [row.iso, { choices, emptyReason: choices.length ? '' : explainMissingTaraWindow(day, timeline, candidates, goal, eventDuration.value, timing.value) }]
   }))
@@ -556,8 +507,8 @@ function openPanchanga(row: DayRow, choice?: TaraWindow) {
     date: row.iso, time: choice ? formatStart(choice.firstStart) : row.scoreTime, city,
     lat: String(lat), lon: String(lon), tz: String(tz), mode: 'apparent',
   })
+  if (currentEvent.value) params.set('goal', currentEvent.value.id)
   if (windowGoal.value && durationValid.value) {
-    params.set('goal', windowGoal.value.id)
     params.set('duration', String(eventDuration.value))
     params.set('timing', timing.value)
   }
@@ -603,7 +554,7 @@ watchEffect(() => {
   setPageHeader({
     title: 'Подобрать дату',
     subtitle: currentEvent.value
-      ? `${eventLabel.value(currentEvent.value).toLowerCase()} · ${fmtShort(noonOf(from.value))} – ${fmtShort(noonOf(to.value))}`
+      ? `${currentEvent.value.label.toLowerCase()} · ${fmtShort(noonOf(from.value))} – ${fmtShort(noonOf(to.value))}`
       : 'мухурта под событие',
     back: '/me',
     place: { city: place.value.city, time: `${rangeLen.value} дн.` },
@@ -632,26 +583,25 @@ const updatedLabel = computed(() =>
           >
         </div>
 
-        <p v-if="!events.length" class="pd-msg">Загружаем справочник событий…</p>
-        <p v-else-if="!groupedEvents.length" class="pd-msg">
+        <p v-if="!groupedEvents.length" class="pd-msg">
           Ничего не нашлось по запросу «{{ query }}».
         </p>
 
-        <div v-for="g in groupedEvents" :key="g.title" class="pd-group">
-          <div class="pd-group__title">{{ g.title }}</div>
+        <div v-for="g in groupedEvents" :key="g.label" class="pd-group">
+          <div class="pd-group__title">{{ g.label }}</div>
           <div class="pd-group__items">
             <button
-              v-for="e in g.items"
+              v-for="e in g.goals"
               :key="e.id"
               type="button"
               class="pd-ev"
               :class="{ 'is-on': e.id === eventId }"
               :aria-pressed="e.id === eventId"
-              :title="e.name"
+              :title="eventRuleForGoal(e)?.name || e.label"
               @click="eventId = e.id"
             >
-              <span class="pd-ev__ic" aria-hidden="true">{{ e.icon }}</span>
-              {{ eventLabel(e) }}
+              <span v-if="eventRuleForGoal(e)?.icon" class="pd-ev__ic" aria-hidden="true">{{ eventRuleForGoal(e)?.icon }}</span>
+              {{ e.label }}
             </button>
           </div>
         </div>
@@ -678,14 +628,8 @@ const updatedLabel = computed(() =>
         <UiDisclaimer v-if="rangeError" tone="warn">{{ rangeError }}</UiDisclaimer>
         <UiKv v-else k="Дней в диапазоне" :v="String(rangeLen)" />
         <div class="pd-time-controls">
-          <label class="pd-field">
-            <span>Цель подбора времени</span>
-            <select v-model="goalId" class="pd-input">
-              <option value="">Только даты</option>
-              <optgroup v-for="group in TARA_GOAL_GROUPS" :key="group.label" :label="group.label">
-                <option v-for="goal in group.goals" :key="goal.id" :value="goal.id">{{ goal.label }}</option>
-              </optgroup>
-            </select>
+          <label v-if="currentRule">
+            <input v-model="showWindows" type="checkbox"> Подобрать ещё и время внутри дня
           </label>
           <template v-if="windowGoal">
             <label class="pd-field">
@@ -753,13 +697,13 @@ const updatedLabel = computed(() =>
     <!-- ═══════════ РЕЗУЛЬТАТ ═══════════ -->
     <template v-else-if="rows.length && currentEvent">
       <UiSectionHead>
-        Итог: {{ eventLabel(currentEvent).toLowerCase() }}
+        Итог: {{ currentEvent.label.toLowerCase() }}
         <UiMethodNote id="А9" />
       </UiSectionHead>
       <!-- Вводный абзац модели — из content/ui_texts.json (picker_lead). -->
-      <p v-if="t('picker_lead')" class="pd-msg">{{ t('picker_lead') }}</p>
+      <p v-if="currentRule && t('picker_lead')" class="pd-msg">{{ t('picker_lead') }}</p>
 
-      <UiCard>
+      <UiCard v-if="currentRule">
         <UiVerdict
           :score="`${summary.great + summary.good}`"
           :tone="summary.great + summary.good ? 'good' : summary.ok ? 'neutral' : 'bad'"
@@ -774,7 +718,7 @@ const updatedLabel = computed(() =>
             подходящих дней в этом периоде не нашлось
           </template>
           <template #note>
-            {{ currentEvent.name }}. Проверено {{ scoredRows.length }} дн. из
+            {{ currentRule.name }}. Проверено {{ scoredRows.length }} дн. из
             {{ rangeLen }}<template v-if="failedRows.length">, не удалось посчитать
               {{ failedRows.length }}</template>. Отличных — {{ summary.great }},
             хороших — {{ summary.good }}, приемлемых — {{ summary.ok }},
@@ -797,12 +741,16 @@ const updatedLabel = computed(() =>
         </UiDisclaimer>
       </UiCard>
 
+      <UiCard v-else>
+        <p class="pd-msg">Для события «{{ currentEvent.label }}» пока нет правил оценки даты на восходе. Для каждого дня можно проверить время по имеющимся факторам.</p>
+      </UiCard>
+
       <!-- ─────────── РАЗБОР ДНЯ ─────────── -->
       <template v-if="selected">
         <UiSectionHead title="Разбор дня" />
         <UiCard
           :title="`${fmtDate(selected.date)}, ${selected.weekday.toLowerCase()}`"
-          :subtitle="currentEvent.name"
+          :subtitle="currentRule?.name || currentEvent.label"
         >
           <NuxtLink :to="openPanchanga(selected)" class="btn btn--ghost">
             <UiIcon name="calendar" style="width:15px;height:15px" />
@@ -874,57 +822,60 @@ const updatedLabel = computed(() =>
             </UiProOnly>
           </template>
 
-          <p v-else class="pd-msg">
+          <p v-else-if="currentRule" class="pd-msg">
             Эти сутки посчитать не удалось: {{ selected.problem }}.
           </p>
 
-          <!-- Списки справочника показываем как есть: процент — это свёртка,
-               а решение принимают по самим спискам. Титхи, записанные словом
-               («Амавасья», «Пурнима»), и категория «гандантовые» в баллы теперь
-               входят — см. пометки Б2 и Б3 ниже. -->
-          <div class="pd-subhead">Что справочник говорит об этом событии</div>
-          <UiKv
-            v-if="currentEvent.good_nakshatras?.length"
-            k="Благоприятные накшатры" :v="currentEvent.good_nakshatras.join(', ')"
-            tone="good"
-          />
-          <UiKv
-            v-if="currentEvent.avoid_nakshatras?.length"
-            k="Избегаемые накшатры" :v="currentEvent.avoid_nakshatras.join(', ')"
-            tone="bad"
-          />
-          <UiKv
-            v-if="currentEvent.good_tithis?.length"
-            k="Благоприятные титхи" :v="currentEvent.good_tithis.join(', ')"
-            tone="good"
-          />
-          <UiKv
-            v-if="currentEvent.avoid_tithis?.length"
-            k="Избегаемые титхи" :v="currentEvent.avoid_tithis.join(', ')"
-            tone="bad"
-          />
-          <UiKv
-            v-if="currentEvent.good_days?.length"
-            k="Благоприятные дни" :v="currentEvent.good_days.join(', ')"
-            tone="good"
-          />
-          <UiKv
-            v-if="currentEvent.avoid_days?.length"
-            k="Избегаемые дни" :v="currentEvent.avoid_days.join(', ')"
-            tone="bad"
-          />
-          <UiDisclaimer>
-            Модель учитывает накшатру, титхи, день недели, йогу и тара-балу при наличии профиля. Титхи,
-            записанные словом («Амавасья», «Пурнима»), и категория «гандантовые»
-            тоже учитываются. Оговорку «по ряду школ» модель не различает —
-            такая запись считается обычным совпадением, поэтому список стоит
-            сверить глазами.
-          </UiDisclaimer>
-          <div class="pd-notes">
-            <UiMethodNote id="Б2" />
-            <UiMethodNote id="Б3" />
-          </div>
-          <UiDisclaimer :entry="disclaimer('events-muhurta')" />
+          <template v-if="currentRule">
+            <!-- Списки справочника показываем как есть: процент — это свёртка,
+                 а решение принимают по самим спискам. Титхи, записанные словом
+                 («Амавасья», «Пурнима»), и категория «гандантовые» в баллы теперь
+                 входят — см. пометки Б2 и Б3 ниже. -->
+            <div class="pd-subhead">Что справочник говорит об этом событии</div>
+            <UiKv
+              v-if="currentRule.good_nakshatras?.length"
+              k="Благоприятные накшатры" :v="currentRule.good_nakshatras.join(', ')"
+              tone="good"
+            />
+            <UiKv
+              v-if="currentRule.avoid_nakshatras?.length"
+              k="Избегаемые накшатры" :v="currentRule.avoid_nakshatras.join(', ')"
+              tone="bad"
+            />
+            <UiKv
+              v-if="currentRule.good_tithis?.length"
+              k="Благоприятные титхи" :v="currentRule.good_tithis.join(', ')"
+              tone="good"
+            />
+            <UiKv
+              v-if="currentRule.avoid_tithis?.length"
+              k="Избегаемые титхи" :v="currentRule.avoid_tithis.join(', ')"
+              tone="bad"
+            />
+            <UiKv
+              v-if="currentRule.good_days?.length"
+              k="Благоприятные дни" :v="currentRule.good_days.join(', ')"
+              tone="good"
+            />
+            <UiKv
+              v-if="currentRule.avoid_days?.length"
+              k="Избегаемые дни" :v="currentRule.avoid_days.join(', ')"
+              tone="bad"
+            />
+            <UiDisclaimer>
+              Модель учитывает накшатру, титхи, день недели, йогу и тара-балу при наличии профиля. Титхи,
+              записанные словом («Амавасья», «Пурнима»), и категория «гандантовые»
+              тоже учитываются. Оговорку «по ряду школ» модель не различает —
+              такая запись считается обычным совпадением, поэтому список стоит
+              сверить глазами.
+            </UiDisclaimer>
+            <div class="pd-notes">
+              <UiMethodNote id="Б2" />
+              <UiMethodNote id="Б3" />
+            </div>
+            <UiDisclaimer :entry="disclaimer('events-muhurta')" />
+
+          </template>
 
           <template v-if="selectedKalamItems.length">
             <div class="pd-subhead">В какие часы этого дня не начинать</div>
@@ -939,14 +890,14 @@ const updatedLabel = computed(() =>
             <UiMethodNote id="А4" />
           </template>
 
-          <UiProOnly>
+          <UiProOnly v-if="currentRule">
             <div class="pd-subhead">Что проверить астрологу вручную</div>
             <UiReasonList
-              :items="(currentEvent.advisor || []).map((textItem) => ({ text: textItem, tone: 'info' }))"
+              :items="(currentRule.advisor || []).map((textItem) => ({ text: textItem, tone: 'info' }))"
             />
-            <UiKv v-if="currentEvent.house" k="Дома" :v="currentEvent.house" />
-            <UiKv v-if="currentEvent.karaka" k="Карака" :v="currentEvent.karaka" />
-            <UiKv v-if="currentEvent.months" k="Месяцы" :v="currentEvent.months" />
+            <UiKv v-if="currentRule.house" k="Дома" :v="currentRule.house" />
+            <UiKv v-if="currentRule.karaka" k="Карака" :v="currentRule.karaka" />
+            <UiKv v-if="currentRule.months" k="Месяцы" :v="currentRule.months" />
           </UiProOnly>
         </UiCard>
       </template>
@@ -958,10 +909,10 @@ const updatedLabel = computed(() =>
           <div>
             <h2 class="card__title">Дни диапазона</h2>
             <div class="card__sub">
-              и хорошие, и плохие — чтобы было видно, почему день не подошёл
+              {{ currentRule ? 'Оценка каждого дня на восходе' : 'Окна времени по доступным правилам' }}
             </div>
           </div>
-          <div class="pd-sort" role="group" aria-label="Сортировка">
+          <div v-if="currentRule" class="pd-sort" role="group" aria-label="Сортировка">
             <button
               type="button" :class="{ 'is-on': sortBy === 'score' }"
               :aria-pressed="sortBy === 'score'" @click="sortBy = 'score'"
@@ -975,13 +926,13 @@ const updatedLabel = computed(() =>
 
         <template v-if="windowGoal">
           <p v-if="!durationValid" role="status">Укажите длительность от 1 до 1440 минут.</p>
-          <p v-else-if="!hasProfile">Для окон по Тара-бале заполните <NuxtLink to="/me">профиль рождения</NuxtLink>.</p>
-          <p v-else-if="birthLoading" role="status">Рассчитываем накшатру рождения…</p>
-          <p v-else-if="moonUncertainReason === 'boundary'">Для подбора времени уточните пограничную накшатру в профиле.</p>
-          <p v-else-if="!moonNakshatraCandidates.length">Для подбора времени нужны данные о накшатре рождения.</p>
+          <p v-else-if="windowGoal.taras && !hasProfile">Для окон по Тара-бале заполните <NuxtLink to="/me">профиль рождения</NuxtLink>.</p>
+          <p v-else-if="windowGoal.taras && birthLoading" role="status">Рассчитываем накшатру рождения…</p>
+          <p v-else-if="windowGoal.taras && moonUncertainReason === 'boundary'">Для подбора времени уточните пограничную накшатру в профиле.</p>
+          <p v-else-if="windowGoal.taras && !timeCandidates.length">Для подбора времени нужны данные о накшатре рождения.</p>
           <p v-else-if="windowLoading" role="status">Подбираем время в выбранных датах…</p>
           <p v-else-if="windowError" role="alert">{{ windowError }} <UiButton @click="retryWindows++">Повторить</UiButton></p>
-          <p v-else class="pd-window-note">До трёх диапазонов на дату {{ windowGoal.taras ? 'по Тара-бале и факторам времени' : 'для обзора общих условий' }}. Оценка даты на восходе показана отдельно. Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
+          <p v-else class="pd-window-note">До трёх диапазонов на дату {{ windowGoal.taras ? 'по Тара-бале и факторам времени' : 'для обзора общих условий' }}. <template v-if="currentRule">Оценка даты на восходе показана отдельно. </template>Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
         </template>
         <div class="pd-list">
           <div v-for="r in sortedRows" :key="r.iso" class="pd-result-day">
@@ -991,7 +942,7 @@ const updatedLabel = computed(() =>
             :class="{
               'is-best': bestIsos.has(r.iso),
               'is-sel': r.iso === selectedIso,
-              'is-dead': !r.score,
+              'is-dead': currentRule && !r.score,
             }"
             :aria-pressed="r.iso === selectedIso"
             @click="selectedIso = r.iso"
@@ -1046,7 +997,7 @@ const updatedLabel = computed(() =>
               <NuxtLink :to="openPanchanga(r, choice)">
                 {{ formatStart(choice.firstStart) }}<template v-if="choice.firstStart !== choice.lastStart">–{{ formatStart(choice.lastStart) }}</template>
               </NuxtLink>
-              <span>{{ choice.names.join(' / ') }}<template v-if="choice.tithi"> · {{ choice.tithi }}</template><template v-if="choice.yoga"> · {{ choice.yoga }}</template><template v-if="choice.tithiRank < 0"> · избегаемая титхи</template><template v-if="choice.yogaBonus"> · благоприятная йога</template><template v-if="choice.warnings.length"> · {{ choice.warnings.map(flag => TARA_FACTOR_LABELS[flag]).join(', ') }}</template><template v-if="choice.schoolPositions.length"> · предупреждение курса ({{ choice.schoolPositions.join(' / ') }})</template></span>
+              <span>{{ [choice.names.join(' / '), choice.nakshatraRule?.text, choice.weekdayRule?.text, choice.tithi].filter(Boolean).join(' · ') }}<template v-if="choice.yoga"> · {{ choice.yoga }}</template><template v-if="choice.tithiRank < 0"> · избегаемая титхи</template><template v-if="choice.yogaBonus"> · благоприятная йога</template><template v-if="choice.warnings.length"> · {{ choice.warnings.map(flag => TARA_FACTOR_LABELS[flag]).join(', ') }}</template><template v-if="choice.schoolPositions.length"> · предупреждение курса ({{ choice.schoolPositions.join(' / ') }})</template></span>
             </li>
           </ul>
           <p v-else-if="windowsByDate[r.iso]" class="pd-window-note">
@@ -1056,7 +1007,7 @@ const updatedLabel = computed(() =>
         </div>
       </UiCard>
 
-      <UiNoteBar :updated="updatedLabel">
+      <UiNoteBar v-if="currentRule" :updated="updatedLabel">
         Подбор построен на двух запросах к расчёту — транзиты Луны по накшатрам
         и данные панчанги за весь период {{ fmtDate(noonOf(from)) }} — {{ fmtDate(noonOf(to)) }}
         для места «{{ place.city }}» — и весовой модели школы из справочника
@@ -1065,7 +1016,7 @@ const updatedLabel = computed(() =>
           фактор тара-балы отключён — джанма-накшатра неизвестна</template>.
       </UiNoteBar>
 
-      <UiDisclaimer>
+      <UiDisclaimer v-if="currentRule">
         Итог — <b>оценка дня, а не разрешение или запрет</b>. «Слабое окно»
         традиция читает как повод отнестись внимательнее и выбрать хороший час,
         а не как причину отменить дело. Точный расчёт под конкретное событие,

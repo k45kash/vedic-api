@@ -146,6 +146,29 @@ export function evaluateEventYoga(ev: EventDef, yogaName: string): ScoreLine {
     : { sign: '~', weight: 0, text: `Йога «${yogaName}» — не в списке благоприятных (проверьте вручную)` }
 }
 
+export function evaluateEventNakshatra(ev: EventDef, nakNo: number): ScoreLine {
+  const name = nakName(nakNo)
+  const weight = WEIGHTS.nakshatra
+  if (ev.good_nakshatras?.some(entry => nakshatraMatches(entry, nakNo, name))) {
+    return { sign: '+', weight, text: `Накшатра ${name} — благоприятна для события` }
+  }
+  if (ev.avoid_nakshatras?.some(entry => nakshatraMatches(entry, nakNo, name))) {
+    return { sign: '⛔', weight, text: `Накшатра ${name} — в списке избегаемых для события (стоп-фактор)` }
+  }
+  return { sign: '~', weight: 0, text: `Накшатра ${name} — нейтральна (не в списках)` }
+}
+
+export function evaluateEventWeekday(ev: EventDef, weekday: WeekdayRu): ScoreLine {
+  const weight = WEIGHTS.day
+  if (ev.good_days?.some(entry => entry.includes(weekday))) {
+    return { sign: '+', weight, text: `${weekday} — благоприятный день для события` }
+  }
+  if (ev.avoid_days?.some(entry => entry.includes(weekday))) {
+    return { sign: '−', weight, text: `${weekday} — в списке избегаемых дней` }
+  }
+  return { sign: '~', weight: 0, text: `${weekday} — нейтральный день` }
+}
+
 export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
   const ev = EVENTS.events.find((e) => e.id === input.eventId)
   if (!ev) return null
@@ -159,20 +182,14 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
   // 1. Накшатра дня — подходит ли делу
   if (input.dayNakNo) {
     total += WEIGHTS.nakshatra
-    const nm = nakName(input.dayNakNo)
-    const good = (ev.good_nakshatras || []).some((x) => nakshatraMatches(x, input.dayNakNo!, nm))
-    const bad = (ev.avoid_nakshatras || []).some((x) => nakshatraMatches(x, input.dayNakNo!, nm))
-    if (good) {
-      gained += WEIGHTS.nakshatra
-      lines.push({ sign: '+', weight: WEIGHTS.nakshatra, text: `Накшатра ${nm} — благоприятна для события` })
-    } else if (bad) {
-      gained -= WEIGHTS.nakshatra
+    const line = evaluateEventNakshatra(ev, input.dayNakNo)
+    if (line.sign === '+') gained += line.weight
+    if (line.sign === '⛔') {
+      gained -= line.weight
       vetoCap = Math.min(vetoCap, 40)
-      if (!vetoMsg) vetoMsg = 'Избегаемая накшатра для события'
-      lines.push({ sign: '⛔', weight: WEIGHTS.nakshatra, text: `Накшатра ${nm} — в списке избегаемых для события (стоп-фактор)` })
-    } else {
-      lines.push({ sign: '~', weight: 0, text: `Накшатра ${nm} — нейтральна (не в списках)` })
+      vetoMsg = 'Избегаемая накшатра для события'
     }
+    lines.push(line)
   }
 
   // 2. Тара-бала — лично для человека
@@ -196,17 +213,10 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
   // 3. День недели
   if (input.weekday) {
     total += WEIGHTS.day
-    const gd = (ev.good_days || []).some((x) => x.includes(input.weekday!))
-    const bd = (ev.avoid_days || []).some((x) => x.includes(input.weekday!))
-    if (gd) {
-      gained += WEIGHTS.day
-      lines.push({ sign: '+', weight: WEIGHTS.day, text: `${input.weekday} — благоприятный день для события` })
-    } else if (bd) {
-      gained -= WEIGHTS.day
-      lines.push({ sign: '−', weight: WEIGHTS.day, text: `${input.weekday} — в списке избегаемых дней` })
-    } else {
-      lines.push({ sign: '~', weight: 0, text: `${input.weekday} — нейтральный день` })
-    }
+    const line = evaluateEventWeekday(ev, input.weekday)
+    if (line.sign === '+') gained += line.weight
+    if (line.sign === '−') gained -= line.weight
+    lines.push(line)
   }
 
   if (input.tithi) {

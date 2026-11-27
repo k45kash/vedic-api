@@ -134,3 +134,48 @@ def test_range_picker_uses_daily_tithi_yoga_and_other_factors(client):
     assert client.post("/api/panchang/tara-windows", json={
         **place, "date_start": start, "date_end": "2027-03-01",
     }).status_code == 422
+
+
+def test_общий_каталог_и_проверка_смены_накшатры_во_время_события(tmp_path):
+    from _ts_bridge import run_ts
+
+    result = run_ts("""
+      const { EVENT_GOAL_GROUPS, findEventGoal, findTaraWindows } = await import(FE + 'calculators/tara-windows.ts')
+      const { listEvents } = await import(FE + 'calculators/event-picker.ts')
+      const ids = EVENT_GOAL_GROUPS.flatMap(group => group.goals.map(goal => goal.id))
+      const date = '2026-11-27'
+      const at = time => Date.parse(date + 'T' + time + ':00Z')
+      const interval = (from, to, num) => ({
+        dt_start: date + 'T' + from + ':00Z', dt_end: date + 'T' + to + ':00Z', num,
+      })
+      const day = { start: at('10:00'), end: at('14:00') }
+      const timeline = {
+        nakshatra: [interval('10:00', '12:00', 4), interval('12:00', '14:00', 9)],
+        vara: [interval('10:00', '12:00', 4), interval('12:00', '14:00', 5)],
+        karana: [], rahu: [], abhijit: [],
+      }
+      const wedding = findEventGoal('wedding')
+      const start = at('11:30')
+      const [atStart] = findTaraWindows(day, timeline, [], wedding, 60, 'start', start)
+      const [whole] = findTaraWindows(day, timeline, [], wedding, 60, 'whole', start)
+      const choices = findTaraWindows(day, timeline, [], wedding, 60, 'whole')
+      out({
+        complete: listEvents().every(event => ids.includes(event.id)),
+        unique: ids.length === new Set(ids).size,
+        alias: findEventGoal('departure').id,
+        extra: ids.includes('first-date'),
+        startVeto: atStart.veto, wholeVeto: whole.veto,
+        blockedNakshatra: whole.nakshatraRule.sign,
+        weekday: whole.weekdayRule.sign,
+        latestStart: Math.max(...choices.map(choice => choice.lastStart)),
+        noon: at('12:00'),
+      })
+    """, tmp_path)
+
+    assert result["complete"] and result["unique"] and result["extra"]
+    assert result["alias"] == "travel"
+    assert result["startVeto"] is False
+    assert result["wholeVeto"] is True
+    assert result["blockedNakshatra"] == "⛔"
+    assert result["weekday"] == "+"
+    assert result["latestStart"] == result["noon"] - 60 * 60 * 1000
