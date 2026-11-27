@@ -113,14 +113,16 @@ def test_automatic_stavropol_agrees_with_reference(client):
         ]
 
 
-def test_range_picker_uses_daily_tara_bhadra_and_solar_factors(client):
+def test_range_picker_uses_daily_tithi_yoga_and_other_factors(client):
     start, end = "2026-11-27", "2026-11-28"
     response = client.post("/api/panchang/tara-windows", json={
         **place, "date_start": "2026-11-25", "date_end": end,
     })
     assert response.status_code == 200
     daily = client.post("/api/panchang/day", json=place).json()["rows"]
-    for key, rows in response.json().items():
+    factors = response.json()
+    assert {"tithi", "yoga"} <= factors.keys()
+    for key, rows in factors.items():
         batch = [row for row in rows if row["dt_start"][:10] < end and row["dt_end"] > start + "T00:00:00"]
         reference = [row for row in daily[key] if key != "karana" or row["is_bhadra"]]
         assert len(batch) == len(reference), key

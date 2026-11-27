@@ -546,7 +546,7 @@ const windowsByDate = computed<Record<string, { choices: TaraWindow[]; emptyReas
     const day = { start, end }
     const candidates = moonNakshatraCandidates.value
     const choices = findTaraWindows(day, timeline, candidates, goal, eventDuration.value, timing.value).slice(0, 3)
-    return [row.iso, { choices, emptyReason: choices.length ? '' : explainMissingTaraWindow(day, timeline, candidates, goal) }]
+    return [row.iso, { choices, emptyReason: choices.length ? '' : explainMissingTaraWindow(day, timeline, candidates, goal, eventDuration.value, timing.value) }]
   }))
 })
 function formatStart(epoch: number) { return new Date(epoch).toISOString().slice(11, 16) }
@@ -1046,7 +1046,7 @@ const updatedLabel = computed(() =>
               <NuxtLink :to="openPanchanga(r, choice)">
                 {{ formatStart(choice.firstStart) }}<template v-if="choice.firstStart !== choice.lastStart">–{{ formatStart(choice.lastStart) }}</template>
               </NuxtLink>
-              <span>{{ choice.names.join(' / ') }}<template v-if="choice.warnings.length"> · {{ choice.warnings.map(flag => TARA_FACTOR_LABELS[flag]).join(', ') }}</template><template v-if="choice.schoolPositions.length"> · предупреждение курса ({{ choice.schoolPositions.join(' / ') }})</template></span>
+              <span>{{ choice.names.join(' / ') }}<template v-if="choice.tithi"> · {{ choice.tithi }}</template><template v-if="choice.yoga"> · {{ choice.yoga }}</template><template v-if="choice.tithiRank < 0"> · избегаемая титхи</template><template v-if="choice.yogaBonus"> · благоприятная йога</template><template v-if="choice.warnings.length"> · {{ choice.warnings.map(flag => TARA_FACTOR_LABELS[flag]).join(', ') }}</template><template v-if="choice.schoolPositions.length"> · предупреждение курса ({{ choice.schoolPositions.join(' / ') }})</template></span>
             </li>
           </ul>
           <p v-else-if="windowsByDate[r.iso]" class="pd-window-note">

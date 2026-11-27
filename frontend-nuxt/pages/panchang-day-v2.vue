@@ -393,7 +393,7 @@ const windowChoices = computed(() => {
   )
 })
 const emptyWindowReason = computed(() => timeline.value
-  ? explainMissingTaraWindow(windowDay.value, timeline.value.rows, moonNakshatraCandidates.value, selectedGoal.value)
+  ? explainMissingTaraWindow(windowDay.value, timeline.value.rows, moonNakshatraCandidates.value, selectedGoal.value, eventDuration.value, timing.value)
   : '')
 function windowClock(epoch: number) {
   const stamp = localStamp(epoch)
@@ -595,6 +595,13 @@ const karakas = computed(() => {
               <strong>{{ checkSelectedTime ? 'Проверка на' : selectedGoal.taras ? 'Начать' : 'Обзор стартов' }} {{ windowClock(choice.firstStart) }}<template v-if="choice.lastStart !== choice.firstStart">–{{ windowClock(choice.lastStart) }}</template></strong>
               <p>{{ choice.names.join(' / ') }}<template v-if="choice.fits === true"> · {{ selectedGoal.reason }}</template></p>
               <p v-if="checkSelectedTime && choice.fits === false" class="school-warning">Тара-бала не соответствует ориентиру для этой цели в выбранном режиме.</p>
+              <p v-if="choice.tithi && !choice.tithiRule">{{ choice.tithi }}</p>
+              <p v-if="choice.yoga">{{ choice.yoga }}</p>
+              <p v-if="choice.tithiRule" :class="{ 'school-warning': choice.tithiRule.sign === '−' || choice.veto }">
+                <template v-if="choice.tithi && timing === 'whole' && (choice.veto || choice.tithiRank < 0)">{{ choice.tithi }} на старте. В течение события · </template>{{ choice.tithiRule.text }}
+              </p>
+              <p v-if="choice.yogaBonus">Благоприятная йога по справочнику события {{ timing === 'start' ? 'на момент начала' : 'на всей длительности' }}.</p>
+              <p v-if="!choice.tithi || !choice.yoga">На момент начала получены неполные данные титхи или йоги.</p>
               <p v-if="checkSelectedTime && !choice.caution">Предупреждений по проверяемым факторам нет.</p>
               <p v-if="choice.beginsInAbhijit">{{ checkSelectedTime ? 'Выбранное время приходится на Абхиджит.' : 'Первый старт приходится на Абхиджит.' }}</p>
               <p v-for="flag in choice.warnings" :key="flag" class="school-warning">

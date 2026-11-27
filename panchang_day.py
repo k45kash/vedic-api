@@ -71,6 +71,8 @@ def tara_window_timeline(first, last, lat, lon, tz):
     jd = dt_to_jd(begin) - tz / 24
     limit = jd + (end - begin).days
     rows = dict(nakshatra=moon_nakshatras(jd, limit, tz),
+                tithi=calc_tithis(jd - 2, limit + 2, tz),
+                yoga=calc_yogas(jd - 2, limit + 2, tz),
                 karana=[row for row in calc_karanas(jd - 2, limit + 2, tz) if row["is_bhadra"]],
                 vara=[], abhijit=[], rahu=[])
     # Каждый день ищет цикл независимо, как дневная панчанга.

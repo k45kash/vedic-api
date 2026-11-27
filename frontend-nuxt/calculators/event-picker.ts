@@ -109,6 +109,43 @@ export function listEvents(): EventDef[] {
   return EVENTS.events
 }
 
+export function evaluateEventTithi(ev: EventDef, tn: number, paksha: Paksha): {
+  line: ScoreLine; cap: number; veto?: string
+} {
+  let tname = TITHI.tithis[tn - 1]?.name || `титхи ${tn}`
+  if (tn === 15) tname = paksha === 'krishna' ? 'Амавасья (новолуние)' : 'Пурнима (полнолуние)'
+  const pakshaLabel = paksha === 'krishna' ? 'убывающая' : 'растущая'
+  const gt = (ev.good_tithis || []).some((x) => tithiMatches(x, tn, paksha))
+  const bt = (ev.avoid_tithis || []).some((x) => tithiMatches(x, tn, paksha))
+
+  const weight = WEIGHTS.tithi
+  if (tn === 15 && paksha === 'krishna' && MUNDANE_IDS.includes(ev.id)) {
+    return {
+      cap: 20, veto: 'Амавасья (новолуние) — стоп-фактор для мирских дел',
+      line: { sign: '⛔', weight, text: 'Титхи 15 — Амавасья (новолуние): стоп-фактор, перебивает остальное' },
+    }
+  }
+  const label = `Титхи ${tn} (${tname}, ${pakshaLabel})`
+  if ([4, 9, 14].includes(tn) && RIKTA_SENSITIVE_IDS.includes(ev.id)) {
+    return {
+      cap: 30, veto: 'Рикта-титхи («пустые руки») — сильно неблагоприятна для начинаний',
+      line: { sign: '⛔', weight, text: `${label} — рикта («пустые руки»): стоп-фактор для начинаний` },
+    }
+  }
+  if (gt) return { cap: 100, line: { sign: '+', weight, text: `${label} — благоприятна` } }
+  if (bt) return { cap: 100, line: { sign: '−', weight, text: `${label} — в списке избегаемых` } }
+  return { cap: 100, line: { sign: '~', weight: 0, text: `${label} — нейтральна` } }
+}
+
+export function evaluateEventYoga(ev: EventDef, yogaName: string): ScoreLine {
+  const normalize = (name: string) => name.trim().toLowerCase()
+    .replace(/\s*\([^)]*\)$/, '').replace(/[-– ]йога$/, '').trim()
+  const name = normalize(yogaName)
+  return (ev.good_yogas || []).some(entry => normalize(entry) === name)
+    ? { sign: '+', weight: WEIGHTS.yoga, text: `Йога «${yogaName}» — в числе благоприятных` }
+    : { sign: '~', weight: 0, text: `Йога «${yogaName}» — не в списке благоприятных (проверьте вручную)` }
+}
+
 export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
   const ev = EVENTS.events.find((e) => e.id === input.eventId)
   if (!ev) return null
@@ -172,51 +209,21 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
     }
   }
 
-  // 4. Титхи (с пакшей); Амавасья и рикта — стоп-факторы
   if (input.tithi) {
     total += WEIGHTS.tithi
-    const tn = input.tithi
-    const paksha = input.paksha || 'shukla'
-    let tname = TITHI.tithis[tn - 1]?.name || `титхи ${tn}`
-    if (tn === 15) tname = paksha === 'krishna' ? 'Амавасья (новолуние)' : 'Пурнима (полнолуние)'
-    const pakshaLabel = paksha === 'krishna' ? 'убывающая' : 'растущая'
-    const gt = (ev.good_tithis || []).some((x) => tithiMatches(x, tn, paksha))
-    const bt = (ev.avoid_tithis || []).some((x) => tithiMatches(x, tn, paksha))
-
-    if (tn === 15 && paksha === 'krishna' && MUNDANE_IDS.includes(ev.id)) {
-      gained -= WEIGHTS.tithi
-      vetoCap = Math.min(vetoCap, 20)
-      vetoMsg = 'Амавасья (новолуние) — стоп-фактор для мирских дел'
-      lines.push({ sign: '⛔', weight: WEIGHTS.tithi, text: 'Титхи 15 — Амавасья (новолуние): стоп-фактор, перебивает остальное' })
-    } else if ([4, 9, 14].includes(tn) && RIKTA_SENSITIVE_IDS.includes(ev.id)) {
-      gained -= WEIGHTS.tithi
-      vetoCap = Math.min(vetoCap, 30)
-      if (!vetoMsg) vetoMsg = 'Рикта-титхи («пустые руки») — сильно неблагоприятна для начинаний'
-      lines.push({ sign: '⛔', weight: WEIGHTS.tithi, text: `Титхи ${tn} (${tname}, ${pakshaLabel}) — рикта («пустые руки»): стоп-фактор для начинаний` })
-    } else if (gt) {
-      gained += WEIGHTS.tithi
-      lines.push({ sign: '+', weight: WEIGHTS.tithi, text: `Титхи ${tn} (${tname}, ${pakshaLabel}) — благоприятна` })
-    } else if (bt) {
-      gained -= WEIGHTS.tithi
-      lines.push({ sign: '−', weight: WEIGHTS.tithi, text: `Титхи ${tn} (${tname}, ${pakshaLabel}) — в списке избегаемых` })
-    } else {
-      lines.push({ sign: '~', weight: 0, text: `Титхи ${tn} (${tname}, ${pakshaLabel}) — нейтральна` })
-    }
+    const { line, cap, veto } = evaluateEventTithi(ev, input.tithi, input.paksha || 'shukla')
+    if (line.sign === '+') gained += WEIGHTS.tithi
+    if (line.sign === '−' || line.sign === '⛔') gained -= WEIGHTS.tithi
+    vetoCap = Math.min(vetoCap, cap)
+    if (veto && (cap === 20 || !vetoMsg)) vetoMsg = veto
+    lines.push(line)
   }
 
-  // 5. Йога дня (только бонус — отсутствие в списке не штрафуется)
-  if (input.yogaName && input.yogaName.trim()) {
+  if (input.yogaName?.trim()) {
     total += WEIGHTS.yoga
-    const normalize = (name: string) => name.trim().toLowerCase()
-      .replace(/\s*\([^)]*\)$/, '').replace(/[-– ]йога$/, '').trim()
-    const name = normalize(input.yogaName)
-    const gy = (ev.good_yogas || []).some(entry => normalize(entry) === name)
-    if (gy) {
-      gained += WEIGHTS.yoga
-      lines.push({ sign: '+', weight: WEIGHTS.yoga, text: `Йога «${input.yogaName}» — в числе благоприятных` })
-    } else {
-      lines.push({ sign: '~', weight: 0, text: `Йога «${input.yogaName}» — не в списке благоприятных (проверьте вручную)` })
-    }
+    const yoga = evaluateEventYoga(ev, input.yogaName)
+    if (yoga.sign === '+') gained += WEIGHTS.yoga
+    lines.push(yoga)
   }
 
   if (total === 0) return null
