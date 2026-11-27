@@ -242,6 +242,43 @@ const nextChange = computed(() => {
   if (!next.length) return []
   return next.filter(item => item.at === next[0].at)
 })
+// Группируем по абсолютному времени: повторяющийся час может иметь одинаковую
+// подпись на шкале, хотя события относятся к разным моментам.
+const dayEvents = computed(() => {
+  const rows = timeline.value?.rows
+  if (!rows) return []
+  const start = windowStart.value
+  const end = start + dayMinutes.value * 60000
+  const groups = new Map<number, { stamp: string; epoch: number; labels: string[] }>()
+  function add(stamp: string, description: string) {
+    const epoch = ms(stamp)
+    if (!Number.isFinite(epoch) || epoch < start || epoch >= end) return
+    const group = groups.get(epoch)
+    if (group) group.labels.push(description)
+    else groups.set(epoch, { stamp, epoch, labels: [description] })
+  }
+
+  for (const [key, title] of details) {
+    for (const interval of rows[key] ?? []) {
+      const prefix = key === 'vara' ? 'Восход · ' : ''
+      add(interval.dt_start, prefix + title + ' → ' + label(interval))
+      if (interval.sunset) add(interval.sunset, 'Закат')
+    }
+  }
+  for (const key of ['rahu', 'abhijit']) {
+    for (const interval of rows[key] ?? []) {
+      add(interval.dt_start, label(interval) + ' начинается')
+      add(interval.dt_end, label(interval) + ' заканчивается')
+    }
+  }
+  return [...groups.values()].sort((a, b) => a.epoch - b.epoch)
+})
+const nextDayEvent = computed(() => dayEvents.value.find(event => event.epoch > instant.value))
+function eventTime(stamp: string) {
+  const time = stamp.slice(11, 19)
+  const offset = stamp.match(/[+-]\d{2}:\d{2}$/)?.[0]
+  return dayMinutes.value !== 1440 && offset ? time + ' · UTC' + offset : time
+}
 const abhijitComparison = computed(() => {
   const rahu = timeline.value?.rows.rahu ?? []
   return (timeline.value?.rows.abhijit ?? []).map(abhijit => {
@@ -347,6 +384,20 @@ const karakas = computed(() => {
           <button @click="goToChange(nextChange[0].at)">К переходу</button>
         </div>
       </section>
+      <details v-if="dayEvents.length" class="panel day-events">
+        <summary>Переходы дня</summary>
+        <ol>
+          <li v-for="event in dayEvents" :key="event.epoch" :class="{ upcoming: nextDayEvent === event }">
+            <button type="button" :aria-label="'К событию в ' + eventTime(event.stamp)" @click="goToChange(event.stamp)">
+              {{ eventTime(event.stamp) }}
+            </button>
+            <div>
+              <small v-if="nextDayEvent === event">Следующее событие</small>
+              <span v-for="description in event.labels" :key="description">{{ description }}</span>
+            </div>
+          </li>
+        </ol>
+      </details>
       <button v-if="mobile" class="track-toggle" :aria-expanded="extraTracks" @click="extraTracks = !extraTracks">{{ extraTracks ? 'Свернуть дополнительные ряды' : 'Показать дополнительные ряды' }}</button>
       <label class="minute-slider">Минута на шкале <input type="range" min="0" :max="dayMinutes - 1" :value="minute" :aria-valuetext="clockOptions.length > 1 && selected ? clock + ' · ' + offsetLabel(selected.offset) : clock" @input="selectMinute(Number(($event.target as HTMLInputElement).value))"></label>
       <div class="scroll panel"><div class="scale">
@@ -441,5 +492,13 @@ const karakas = computed(() => {
 .calculation-note dd { margin: 0; font-variant-numeric: tabular-nums; }
 .calculation-note p { margin-bottom: 0; }
 .tithi-note { margin-top: 8px; font-size: 13px; }
+.day-events { margin-bottom: 14px; }
+.day-events summary { cursor: pointer; color: #166047; padding: 12px 14px; }
+.day-events ol { list-style: none; margin: 0; padding: 0 10px 10px; }
+.day-events li { display: flex; align-items: flex-start; gap: 12px; border-top: 1px solid #d6e0df; padding: 8px 4px; }
+.day-events li.upcoming { background: #edf7f2; }
+.day-events li button { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.day-events li span, .day-events li small { display: block; }
+.day-events li small { color: #166047; }
 .clock-choice { display: block; margin-bottom: 8px; }
 </style>
