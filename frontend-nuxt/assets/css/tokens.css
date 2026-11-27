@@ -880,3 +880,24 @@ html:has(> body.vd-scope){height:100%}
   .vd-app *::before,
   .vd-app *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
+
+/* Формы календаря накшатр и Сади Сати */
+.vd-app .astro-tool .birth{display:grid;gap:14px}
+.vd-app .astro-tool .row{display:flex;flex-wrap:wrap;gap:12px}
+.vd-app .astro-tool .field{display:grid;align-content:start;gap:5px;flex:1 1 140px;min-width:0}
+.vd-app .astro-tool .field label{color:var(--body);font-size:13px;font-weight:600}
+.vd-app .astro-tool .field :is(input,select){
+  width:100%;min-width:0;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;
+  background:var(--surface-2);color:var(--ink);font:inherit;font-size:16px;
+}
+.vd-app .astro-tool .primary{
+  justify-self:start;padding:9px 15px;border:1px solid var(--accent-line);border-radius:10px;
+  background:var(--accent-soft);color:var(--accent-ink);font-weight:600;cursor:pointer;
+}
+.vd-app .astro-tool .primary:hover:enabled{border-color:var(--accent)}
+.vd-app .astro-tool .primary:disabled{opacity:.65;cursor:wait}
+.vd-app .astro-tool .astro-result{display:grid;gap:16px;margin-top:16px}
+.vd-app .astro-tool .astro-result > p{margin:0;color:var(--body)}
+.vd-app .astro-tool .astro-result > .astro-error{
+  padding:12px;border:1px solid var(--bad-line);border-radius:10px;background:var(--bad-soft);color:var(--bad);
+}

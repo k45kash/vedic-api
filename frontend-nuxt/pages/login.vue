@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Типы авто-импортом не тянем — импортируем явно, так надёжнее.
 import type { TelegramAuthPayload } from '~/composables/useAuth'
+import { authStorage } from '~/utils/authStorage'
 import { LOGIN_RETURN_KEY, safeLoginReturn } from '~/utils/loginRedirect'
 
 useHead({ title: 'Вход — Vedic' })
@@ -52,11 +53,11 @@ async function goOAuth(provider: string) {
   error.value = ''
   try {
     // Внутри произойдёт window.location.href = authorization_url.
-    sessionStorage.setItem(LOGIN_RETURN_KEY, redirectTo.value)
+    authStorage('sessionStorage', LOGIN_RETURN_KEY, redirectTo.value)
     await auth.startOAuth(provider)
   } catch (e) {
     error.value = humanizeAuthError(e)
-    sessionStorage.removeItem(LOGIN_RETURN_KEY)
+    authStorage('sessionStorage', LOGIN_RETURN_KEY, null)
     oauthPending.value = ''
   }
 }
@@ -115,19 +116,19 @@ const hasSocial = computed(() => providers.value.length > 0 || !!telegramBot.val
 <template>
   <div>
     <h1>Вход</h1>
-    <p class="subtitle">Войдите по email и паролю или через соц-сеть.</p>
+    <p class="subtitle">Войдите по email и паролю<template v-if="hasSocial"> или через соцсеть</template>.</p>
 
     <form class="birth" @submit.prevent="submit">
       <div class="row">
         <div class="field">
-          <label>Email</label>
-          <input v-model="email" type="email" required autocomplete="username" />
+          <label for="login-email">Email</label>
+          <input id="login-email" v-model="email" type="email" required autocomplete="username" autocapitalize="none" spellcheck="false" />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label>Пароль</label>
-          <input v-model="password" type="password" required autocomplete="current-password" />
+          <label for="login-password">Пароль</label>
+          <input id="login-password" v-model="password" type="password" required autocomplete="current-password" />
         </div>
       </div>
 
@@ -163,11 +164,12 @@ const hasSocial = computed(() => providers.value.length > 0 || !!telegramBot.val
       </template>
     </form>
 
-    <p v-if="error" class="error auth-error">{{ error }}</p>
+    <p v-if="error" class="error auth-error" role="alert">{{ error }}</p>
   </div>
 </template>
 
 <style scoped>
+.birth .field input { font-size: 16px; min-width: 0; }
 .auth-links { display: flex; gap: 18px; font-size: 13px; }
 .auth-links a { color: #0071e3; text-decoration: none; }
 .auth-links a:hover { text-decoration: underline; }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { authStorage } from '~/utils/authStorage'
 import { LOGIN_RETURN_KEY, safeLoginReturn } from '~/utils/loginRedirect'
 // Приёмник OAuth-возврата. Бэкенд редиректит браузер сюда:
 //   /auth/callback#token=<jwt>&provider=<name>
@@ -11,6 +12,7 @@ const auth = useAuth()
 const error = ref('')
 const provider = ref('')
 const busy = ref(true)
+const returnTo = ref('/me')
 
 const PROVIDER_RU: Record<string, string> = {
   yandex: 'Яндекс',
@@ -24,8 +26,8 @@ onMounted(async () => {
   const params = new URLSearchParams(hash)
   const token = params.get('token')
   const err = params.get('error')
-  const returnTo = safeLoginReturn(sessionStorage.getItem(LOGIN_RETURN_KEY))
-  sessionStorage.removeItem(LOGIN_RETURN_KEY)
+  returnTo.value = safeLoginReturn(authStorage('sessionStorage', LOGIN_RETURN_KEY))
+  authStorage('sessionStorage', LOGIN_RETURN_KEY, null)
   provider.value = params.get('provider') || ''
 
   // Сразу вычищаем хэш, чтобы токен не остался в адресной строке и в истории.
@@ -46,7 +48,7 @@ onMounted(async () => {
 
   try {
     await auth.loginWithToken(token)
-    await navigateTo(returnTo, { replace: true })
+    await navigateTo(returnTo.value, { replace: true })
   } catch (e) {
     error.value = humanizeAuthError(e)
     busy.value = false
@@ -63,7 +65,7 @@ onMounted(async () => {
     <template v-else-if="error">
       <p class="error">{{ error }}</p>
       <p class="back">
-        <NuxtLink to="/login">Вернуться на страницу входа</NuxtLink>
+        <NuxtLink :to="{ path: '/login', query: { redirect: returnTo } }">Вернуться на страницу входа</NuxtLink>
       </p>
     </template>
   </div>

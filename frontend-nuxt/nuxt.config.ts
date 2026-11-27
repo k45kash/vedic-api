@@ -48,6 +48,8 @@ export default defineNuxtConfig({
         '/me',
         '/chart',
         '/today',
+        '/calendar',
+        '/sade-sati',
         '/panchang',
         '/panchang-day',
         '/panchang-day-v2',

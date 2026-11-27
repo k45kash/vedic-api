@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import type { PositionMode } from '~/composables/useBirthForm'
+definePageMeta({ layout: 'app', middleware: 'auth' })
+usePageHeader().setPageHeader({
+  title: 'Календарь накшатр',
+  subtitle: 'Транзиты Луны и пады за выбранный период',
+})
 useHead({ title: 'Календарь — Vedic' })
 
 const api = useApi()
@@ -74,135 +79,127 @@ async function submit() {
 </script>
 
 <template>
-  <div>
-    <h1>Календарь накшатр</h1>
-    <p class="subtitle">Транзиты Луны по накшатрам за выбранный период</p>
+  <div class="astro-tool">
+    <UiCard title="Параметры расчёта">
+      <form class="birth" @submit.prevent="submit">
+        <div class="row">
+          <div class="field">
+            <label for="calendar-start">Дата начала</label>
+            <input id="calendar-start" type="date" v-model="form.date_start" required />
+          </div>
+          <div class="field">
+            <label for="calendar-end">Дата конца</label>
+            <input id="calendar-end" type="date" v-model="form.date_end" required />
+          </div>
+        </div>
+        <div class="row">
+          <CityField
+            v-model:city="form.city"
+            v-model:lat="form.lat"
+            v-model:lon="form.lon"
+            v-model:tz="form.tz"
+            :date="form.date_start"
+          />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="calendar-lat">Широта</label>
+            <input id="calendar-lat" type="number" v-model.number="form.lat" step="0.0001" required />
+          </div>
+          <div class="field">
+            <label for="calendar-lon">Долгота</label>
+            <input id="calendar-lon" type="number" v-model.number="form.lon" step="0.0001" required />
+          </div>
+          <div class="field">
+            <label for="calendar-tz">UTC ±, ч</label>
+            <input id="calendar-tz" type="number" v-model.number="form.tz" step="any" required />
+          </div>
+        </div>
+        <PositionModeField v-model="form.position_mode" :disabled="loading" />
+        <button type="submit" class="primary" :disabled="loading">Рассчитать</button>
+      </form>
+    </UiCard>
 
-    <form class="birth" @submit.prevent="submit">
-      <div class="row">
-        <div class="field">
-          <label>Дата начала</label>
-          <input type="date" v-model="form.date_start" required />
-        </div>
-        <div class="field">
-          <label>Дата конца</label>
-          <input type="date" v-model="form.date_end" required />
-        </div>
-      </div>
-      <div class="row">
-        <CityField
-          v-model:city="form.city"
-          v-model:lat="form.lat"
-          v-model:lon="form.lon"
-          v-model:tz="form.tz"
-          :date="form.date_start"
-        />
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Широта</label>
-          <input type="number" v-model.number="form.lat" step="0.0001" required />
-        </div>
-        <div class="field">
-          <label>Долгота</label>
-          <input type="number" v-model.number="form.lon" step="0.0001" required />
-        </div>
-        <div class="field">
-          <label>UTC ±, ч</label>
-          <input type="number" v-model.number="form.tz" step="0.5" required />
-        </div>
-      </div>
-      <PositionModeField v-model="form.position_mode" :disabled="loading" />
-      <button type="submit" class="primary" :disabled="loading">Рассчитать</button>
-    </form>
-
-    <div class="result">
-      <p v-if="loading" class="loading">Считаем транзиты Луны…</p>
-      <p v-if="error" class="error">Ошибка: {{ error }}</p>
+    <div class="astro-result">
+      <p v-if="loading" role="status">Считаем транзиты Луны…</p>
+      <p v-if="error" class="astro-error" role="alert">{{ error }}</p>
 
       <template v-if="result">
-        <p v-if="!result.length" class="error">Нет данных</p>
+        <p v-if="!result.length">Нет данных</p>
 
-        <div v-else class="nk-list">
-          <template v-for="(nk, i) in result" :key="i">
-            <div class="nk-row" @click="toggleRow(i)">
-              <div>
-                <div class="nk-name">#{{ nk.nk_num }} {{ nk.ru }}</div>
-                <div class="nk-name-en">{{ nk.name }}</div>
+        <UiCard v-else title="Транзиты Луны" subtitle="Выберите накшатру, чтобы раскрыть её пады">
+          <div class="nk-list">
+            <template v-for="(nk, i) in result" :key="i">
+              <button
+                type="button"
+                class="nk-row"
+                :disabled="!nk.padas?.length"
+                :aria-expanded="nk.padas?.length ? openRows.has(i) : undefined"
+                @click="toggleRow(i)"
+              >
+                <span>
+                  <strong class="nk-name">#{{ nk.nk_num }} {{ nk.ru }}</strong>
+                  <span class="nk-name-en">{{ nk.name }}</span>
+                </span>
+                <span><strong>{{ nk.lord }}</strong><br />Гана · {{ nk.gana }}</span>
+                <span><span class="nk-caption">Начало</span>{{ fmt(nk.dt_start) }}</span>
+                <span><span class="nk-caption">Конец</span>{{ fmt(nk.dt_end) }}</span>
+                <span>{{ nk.duration_h?.toFixed(1) }} ч <span v-if="nk.padas?.length" aria-hidden="true">{{ openRows.has(i) ? '▴' : '▾' }}</span></span>
+              </button>
+              <div
+                v-if="nk.padas?.length && openRows.has(i)"
+                class="nk-padas"
+              >
+                <div v-for="(p, j) in nk.padas" :key="j" class="pada-row">
+                  <span class="pada-num">Пада {{ p.pada }}</span>
+                  <span>{{ fmt(p.dt_start) }}</span>
+                  <span>{{ fmt(p.dt_end) }}</span>
+                  <span>{{ p.duration_h?.toFixed(1) }} ч</span>
+                </div>
               </div>
-              <div class="nk-meta"><strong>{{ nk.lord }}</strong><br />Гана: {{ nk.gana }}</div>
-              <div class="nk-meta">{{ fmt(nk.dt_start) }}</div>
-              <div class="nk-meta">{{ fmt(nk.dt_end) }}</div>
-              <div class="nk-duration">{{ nk.duration_h?.toFixed(1) }} ч</div>
-            </div>
-            <div
-              v-if="nk.padas && nk.padas.length"
-              class="nk-padas"
-              :class="{ open: openRows.has(i) }"
-            >
-              <div v-for="(p, j) in nk.padas" :key="j" class="pada-row">
-                <span class="pada-num">{{ p.pada }}</span>
-                <span>{{ fmt(p.dt_start) }}</span>
-                <span>{{ fmt(p.dt_end) }}</span>
-                <span>{{ p.duration_h?.toFixed(1) }} ч</span>
-              </div>
-            </div>
-          </template>
-        </div>
+            </template>
+          </div>
+        </UiCard>
       </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-.nk-list { display: flex; flex-direction: column; gap: 2px; }
-
+.nk-list { display: grid; gap: 8px; }
 .nk-row {
-  background: #fff;
-  border-radius: 14px;
-  padding: 16px 20px;
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 1.35fr 1fr 1fr 1fr auto;
+  gap: 8px 12px;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  cursor: pointer;
-  transition: box-shadow 0.15s;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--body);
+  text-align: left;
 }
-
-.nk-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-
-.nk-name { font-weight: 600; font-size: 15px; color: #1d1d1f; }
-.nk-name-en { font-size: 12px; color: #a1a1a6; margin-top: 1px; }
-
-.nk-meta { font-size: 13px; color: #6e6e73; }
-.nk-meta strong { color: #1d1d1f; font-weight: 500; }
-
-.nk-duration {
-  font-size: 13px;
-  color: #6e6e73;
-  text-align: right;
-}
-
-.nk-padas {
-  display: none;
-  background: #f5f5f7;
-  border-radius: 0 0 14px 14px;
-  overflow: hidden;
-  margin-top: -12px;
-  padding: 4px 20px 12px;
-}
-
-.nk-padas.open { display: block; }
-
+.astro-tool .nk-row { font-size: 13px; }
+.nk-row:not(:disabled) { cursor: pointer; }
+.nk-row:not(:disabled):hover { border-color: var(--accent); }
+.nk-row[aria-expanded="true"] { background: var(--accent-soft); }
+.nk-name { color: var(--ink); font-size: 15px; }
+.nk-name-en, .nk-caption { display: block; font-size: 12px; }
+.nk-padas { padding: 0 14px 8px; }
 .pada-row {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr 1fr;
-  font-size: 13px;
+  grid-template-columns: .65fr 1fr 1fr auto;
+  gap: 6px 12px;
   padding: 8px 0;
-  border-top: 1px solid #e8e8ed;
-  color: #1d1d1f;
+  border-bottom: 1px solid var(--line);
+  color: var(--body);
+  font-size: 13px;
 }
-.pada-row:first-child { border-top: none; }
-.pada-num { color: #a1a1a6; font-weight: 600; }
+.pada-num { color: var(--ink); font-weight: 600; }
+@media (max-width: 720px) {
+  .nk-row, .pada-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nk-row > :last-child { grid-column: 1 / -1; }
+  .pada-num { grid-column: 1 / -1; }
+}
 </style>

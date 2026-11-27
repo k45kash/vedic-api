@@ -44,6 +44,10 @@ const ERROR_RU: Record<string, string> = {
 
 // Переводим ошибку API в текст для пользователя.
 export function humanizeAuthError(e: unknown): string {
+  if (e instanceof TypeError && /fetch|network|load failed/i.test(e.message)) {
+    return 'Не удалось связаться с сервисом. Проверьте подключение и попробуйте снова.'
+  }
+  if (e instanceof ApiError && e.status >= 500) return 'Сервис входа временно недоступен. Попробуйте позже.'
   const raw = e instanceof Error ? e.message : String(e)
   return ERROR_RU[raw] || raw || 'Неизвестная ошибка.'
 }
@@ -80,14 +84,26 @@ export function useAuth() {
     }
   }
 
+  async function acceptToken(accessToken: unknown) {
+    if (typeof accessToken !== 'string' || !accessToken.trim()) {
+      throw new Error('Сервис входа не вернул токен. Попробуйте ещё раз.')
+    }
+    setToken(accessToken)
+    try {
+      await fetchUser()
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        throw new Error('Не удалось подтвердить вход. Попробуйте войти ещё раз.')
+      }
+    }
+  }
+
   async function login(mail: string, password: string) {
     const { access_token } = await api.postForm<{ access_token: string }>('/auth/jwt/login', {
-      username: mail,
+      username: mail.trim(),
       password,
     })
-    setToken(access_token)
-    // Профиль не критичен для входа: если /users/me недоступен, вход не ломаем.
-    await fetchUser().catch(() => null)
+    await acceptToken(access_token)
   }
 
   async function register(mail: string, password: string) {
@@ -100,8 +116,7 @@ export function useAuth() {
 
   // Приём токена извне (OAuth-возврат на /auth/callback).
   async function loginWithToken(access_token: string) {
-    setToken(access_token)
-    await fetchUser().catch(() => null)
+    await acceptToken(access_token)
   }
 
   // Список включённых соц-провайдеров. Бэкенд может быть ещё не задеплоен —
@@ -130,8 +145,7 @@ export function useAuth() {
   // Telegram — не OAuth: виджет отдаёт подписанный payload, бэкенд проверяет HMAC.
   async function loginWithTelegram(payload: TelegramAuthPayload) {
     const { access_token } = await api.post<{ access_token: string }>('/auth/telegram', payload)
-    setToken(access_token)
-    await fetchUser().catch(() => null)
+    await acceptToken(access_token)
   }
 
   // Письма пока реально не уходят (SMTP не подключён) — предупреждаем в UI.

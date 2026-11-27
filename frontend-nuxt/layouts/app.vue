@@ -3,7 +3,7 @@
 // Перенос из prototype/v2.html, визуальные детали шапки и логотипа —
 // из макета prototype/concepte.png.
 //
-// Старая раскладка default.vue не тронута: все стили кабинета живут в
+// Стили кабинета живут в
 // assets/css/tokens.css и заскоуплены под корневой класс .vd-app,
 // а фон страницы включает класс .vd-scope на <body> (см. useHead ниже).
 
@@ -16,8 +16,7 @@ const { isDark, toggleTheme } = useTheme()
 const { isPro, setAudience } = useAudience()
 const auth = useAuth()
 
-// Пункты сайдбара. Первые пять — рабочие маршруты, остальные пока задизейблены
-// с меткой «скоро», как в прототипе.
+// Пункты без маршрута отмечены в меню как «скоро».
 // Тип объявлен явно, а не выведен из `as const`: иначе объединение вариантов
 // «с to» и «с soon» не имеет общего поля `to`, и шаблонная проверка `v-if="item.to"`
 // не тайпчекается.
@@ -33,6 +32,8 @@ const navItems: readonly NavItem[] = [
   { label: 'Карта', icon: 'chart', to: '/chart' },
   { label: 'Сегодня', icon: 'sun', to: '/today' },
   { label: 'Панчанга', icon: 'calendar', to: '/panchang-day-v2' },
+  { label: 'Календарь накшатр', icon: 'calendar', to: '/calendar' },
+  { label: 'Сади Сати', icon: 'chart', to: '/sade-sati' },
   { label: 'Подобрать дату', icon: 'calendar', to: '/pick-date' },
   { label: 'Совместимость', icon: 'heart', to: '/compat' },
   { label: 'Практики', icon: 'lotus', soon: true },
@@ -53,6 +54,16 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') toggleMenu(false)
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
+onMounted(async () => {
+  if (!auth.isAuthenticated.value || auth.user.value) return
+  try {
+    await auth.fetchUser()
+  } catch {
+    if (!auth.isAuthenticated.value) {
+      await navigateTo({ path: '/login', query: { redirect: route.fullPath } }, { replace: true })
+    }
+  }
+})
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 // Буква в аватаре — из email, если профиль уже загружен.

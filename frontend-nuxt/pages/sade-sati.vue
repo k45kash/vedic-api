@@ -1,7 +1,18 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'app', middleware: 'auth' })
 useHead({ title: 'Сади Сати — Vedic' })
+usePageHeader().setPageHeader({
+  title: 'Сади Сати',
+  subtitle: 'Транзиты Сатурна относительно натальной Луны. Сади Сати, Аштама и Кантака Шани',
+})
 
-const form = useBirthForm()
+const form = useBirthForm({ date: '', time: '', city: '', lat: 0, lon: 0, tz: 0 })
+const { profile, hasProfile, timeUnknown } = useBirthProfile()
+
+if (hasProfile.value && profile.value) {
+  const { date, time, timeUnknown: unknown, lat, lon, tz, city } = profile.value
+  Object.assign(form, { date, time: unknown ? '' : time, lat, lon, tz, city })
+}
 const api = useApi()
 const { fmtDate, fmtYears } = useFormatters()
 
@@ -46,24 +57,24 @@ async function submit() {
 </script>
 
 <template>
-  <div>
-    <h1>Сади Сати</h1>
-    <p class="subtitle">
-      Транзит Сатурна через три знака вокруг натальной Луны (~7,5 лет).
-      Параллельно — Аштама и Кантака Шани.
-    </p>
+  <div class="astro-tool">
+    <UiCard
+      title="Данные рождения"
+      :link-text="hasProfile ? undefined : 'Заполнить профиль'"
+      :link-to="hasProfile ? undefined : '/me'"
+    >
+      <p v-if="timeUnknown && !form.time" class="birth-note">Для расчёта укажите время рождения.</p>
+      <BirthForm :form="form" :submitting="loading" @submit="submit" />
+    </UiCard>
 
-    <BirthForm :form="form" :submitting="loading" @submit="submit" />
-
-    <div class="result">
-      <p v-if="loading" class="loading">Считаем 120 лет транзитов Сатурна…</p>
-      <p v-if="error" class="error">Ошибка: {{ error }}</p>
+    <div class="astro-result">
+      <p v-if="loading" role="status">Считаем транзиты Сатурна…</p>
+      <p v-if="error" class="astro-error" role="alert">{{ error }}</p>
 
       <template v-if="result">
         <!-- Натальная Луна -->
         <section>
-          <h2>Натальная Луна</h2>
-          <div class="card">
+          <UiCard title="Натальная Луна">
             <div class="ss-stats">
               <div class="ss-stat">
                 <div class="ss-stat-lbl">Знак (раши)</div>
@@ -95,15 +106,14 @@ async function submit() {
             <div v-else-if="result.natal_moon.boundary?.near_boundary" class="ss-warn">
               Луна в {{ result.natal_moon.boundary.dist_to_boundary_deg }}° от границы знака.
             </div>
-          </div>
+          </UiCard>
         </section>
 
         <!-- Сейчас -->
         <section>
-          <h2>Сейчас</h2>
-          <div class="card">
+          <UiCard title="Сейчас">
             <template v-if="!result.current.sade_sati && !result.current.ashtama_shani && !result.current.kantaka_shani">
-              <div style="color: #6e6e73">Сейчас ни один период не активен.</div>
+              <div style="color: var(--body)">Сейчас ни один период не активен.</div>
             </template>
 
             <template v-else>
@@ -124,7 +134,7 @@ async function submit() {
                 </span>
                 <div style="margin-top: 10px; font-size: 16px">
                   Сатурн в знаке <b>{{ result.current.sade_sati.sign_ru }}</b>
-                  <span v-if="result.current.sade_sati.is_retrograde_return" style="color: #6e6e73; font-size: 13px">
+                  <span v-if="result.current.sade_sati.is_retrograde_return" style="color: var(--body); font-size: 13px">
                     (возврат после ретроградности)
                   </span>
                 </div>
@@ -157,13 +167,12 @@ async function submit() {
                 </div>
               </div>
             </template>
-          </div>
+          </UiCard>
         </section>
 
         <!-- Циклы -->
         <section v-if="result.sade_sati_cycles.length">
-          <h2>Циклы Сади Сати</h2>
-          <div class="card">
+          <UiCard title="Циклы Сади Сати">
             <div v-for="(c, i) in result.sade_sati_cycles" :key="i" class="ss-cycle">
               <div class="ss-cycle-head">
                 <div class="ss-cycle-title">Цикл #{{ i + 1 }}</div>
@@ -196,13 +205,12 @@ async function submit() {
                 </div>
               </div>
             </div>
-          </div>
+          </UiCard>
         </section>
 
         <!-- Аштама/Кантака -->
         <section v-if="result.ashtama_shani_periods.length">
-          <h2>Аштама Шани · знак {{ result.ashtama_sign.sign_ru }}</h2>
-          <div class="card">
+          <UiCard :title="'Аштама Шани · знак ' + result.ashtama_sign.sign_ru">
             <div class="ss-shani">
               <div
                 v-for="(ep, i) in result.ashtama_shani_periods"
@@ -217,12 +225,11 @@ async function submit() {
                 <div class="when">{{ Math.round(ep.duration_days) }} дн</div>
               </div>
             </div>
-          </div>
+          </UiCard>
         </section>
 
         <section v-if="result.kantaka_shani_periods.length">
-          <h2>Кантака Шани · знак {{ result.kantaka_sign.sign_ru }}</h2>
-          <div class="card">
+          <UiCard :title="'Кантака Шани · знак ' + result.kantaka_sign.sign_ru">
             <div class="ss-shani">
               <div
                 v-for="(ep, i) in result.kantaka_shani_periods"
@@ -237,30 +244,31 @@ async function submit() {
                 <div class="when">{{ Math.round(ep.duration_days) }} дн</div>
               </div>
             </div>
-          </div>
+          </UiCard>
         </section>
       </template>
     </div>
   </div>
 </template>
 
-<style>
-.ss-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-.ss-stat  { background: #f5f5f7; padding: 12px 14px; border-radius: 12px; }
-.ss-stat-lbl { font-size: 11px; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.05em; }
-.ss-stat-val { font-size: 15px; margin-top: 4px; color: #1d1d1f; font-weight: 500; }
+<style scoped>
+.birth-note { margin: 0 0 14px; color: var(--body); font-size: 14px; }
+.ss-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; }
+.ss-stat  { background: var(--surface-2); padding: 12px 14px; border-radius: 12px; }
+.ss-stat-lbl { font-size: 11px; color: var(--body); text-transform: uppercase; letter-spacing: 0.05em; }
+.ss-stat-val { font-size: 15px; margin-top: 4px; color: var(--ink); font-weight: 500; }
 
 .ss-warn {
   margin-top: 12px;
   padding: 10px 14px;
-  background: rgba(255, 184, 0, 0.1);
-  border: 1px solid rgba(255, 184, 0, 0.3);
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
   border-radius: 10px;
   font-size: 13px;
-  color: #715200;
+  color: var(--gold-ink);
 }
 
-.ss-now { padding: 16px 20px; border-radius: 14px; border-left: 4px solid #d0454c; background: #f5f5f7; }
+.ss-now { padding: 16px 20px; border-radius: 14px; border-left: 4px solid #d0454c; background: var(--surface-2); }
 .ss-now + .ss-now { margin-top: 12px; }
 .ss-phase-tag {
   display: inline-block;
@@ -269,15 +277,15 @@ async function submit() {
   font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-.ss-now-meta { font-size: 13px; color: #6e6e73; margin-top: 4px; }
-.ss-progress { margin-top: 10px; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; }
+.ss-now-meta { font-size: 13px; color: var(--body); margin-top: 4px; }
+.ss-progress { margin-top: 10px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
 .ss-progress-fill { height: 100%; }
 
 .ss-cycle { margin-bottom: 24px; }
 .ss-cycle:last-child { margin-bottom: 0; }
 .ss-cycle-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
 .ss-cycle-title { font-weight: 600; font-size: 15px; }
-.ss-cycle-meta  { color: #6e6e73; font-size: 13px; }
+.ss-cycle-meta  { color: var(--body); font-size: 13px; }
 
 .ss-timeline { display: flex; height: 38px; border-radius: 10px; overflow: hidden; }
 .ss-seg { display: flex; align-items: center; justify-content: center; font-size: 11px; color: rgba(0,0,0,0.75); font-weight: 600; overflow: hidden; white-space: nowrap; }
@@ -285,7 +293,7 @@ async function submit() {
 .ss-seg-madhya    { background: #d0454c; color: #fff; }
 .ss-seg-avarohini { background: #6cbf6c; }
 
-.ss-eps { margin-top: 10px; font-size: 13px; color: #6e6e73; }
+.ss-eps { margin-top: 10px; font-size: 13px; color: var(--body); }
 .ss-ep-row { display: grid; grid-template-columns: 120px 1fr auto; gap: 12px; padding: 6px 0; align-items: center; }
 .ss-ep-tag { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; color: #1a1310; }
 .ss-tag-aarohini  { background: #f5a623; }
@@ -294,8 +302,12 @@ async function submit() {
 .ss-retro { display: inline-block; margin-left: 3px; font-weight: 700; cursor: help; opacity: 0.85; }
 
 .ss-shani { display: grid; gap: 8px; }
-.ss-shani-row { display: grid; grid-template-columns: 1fr auto; padding: 10px 14px; background: #f5f5f7; border-radius: 10px; font-size: 13px; }
-.ss-shani-row.current { border-left: 3px solid #0071e3; background: rgba(0, 113, 227, 0.06); }
-.ss-shani-row .when { color: #6e6e73; }
-.ss-badge { display: inline-block; padding: 2px 8px; background: #0071e3; color: #fff; border-radius: 20px; font-size: 11px; font-weight: 600; margin-left: 8px; }
+.ss-shani-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 14px; background: var(--surface-2); border-radius: 10px; font-size: 13px; }
+.ss-shani-row.current { border-left: 3px solid var(--accent-ink); background: var(--accent-soft); }
+.ss-shani-row .when { color: var(--body); }
+.ss-badge { display: inline-block; padding: 2px 8px; background: var(--accent-ink); color: #fff; border-radius: 20px; font-size: 11px; font-weight: 600; margin-left: 8px; }
+@media (max-width: 600px) {
+  .ss-ep-row, .ss-shani-row { grid-template-columns: 1fr; gap: 4px; }
+  .ss-shani-row .when { text-align: left; }
+}
 </style>

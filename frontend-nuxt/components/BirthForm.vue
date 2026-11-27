@@ -7,6 +7,8 @@ defineProps<{
   submitting?: boolean
 }>()
 
+const fieldId = useId()
+
 const emit = defineEmits<{ submit: [] }>()
 </script>
 
@@ -14,12 +16,12 @@ const emit = defineEmits<{ submit: [] }>()
   <form class="birth" @submit.prevent="emit('submit')">
     <div class="row">
       <div class="field">
-        <label>Дата рождения</label>
-        <input type="date" v-model="form.date" required />
+        <label :for="`${fieldId}-date`">Дата рождения</label>
+        <input :id="`${fieldId}-date`" type="date" v-model="form.date" required />
       </div>
       <div class="field">
-        <label>Время</label>
-        <input type="time" v-model="form.time" required />
+        <label :for="`${fieldId}-time`">Время</label>
+        <input :id="`${fieldId}-time`" type="time" v-model="form.time" required />
       </div>
     </div>
 
@@ -36,16 +38,16 @@ const emit = defineEmits<{ submit: [] }>()
 
     <div class="row">
       <div class="field">
-        <label>Широта</label>
-        <input type="number" v-model.number="form.lat" step="0.0001" required />
+        <label :for="`${fieldId}-lat`">Широта</label>
+        <input :id="`${fieldId}-lat`" type="number" v-model.number="form.lat" step="0.0001" required />
       </div>
       <div class="field">
-        <label>Долгота</label>
-        <input type="number" v-model.number="form.lon" step="0.0001" required />
+        <label :for="`${fieldId}-lon`">Долгота</label>
+        <input :id="`${fieldId}-lon`" type="number" v-model.number="form.lon" step="0.0001" required />
       </div>
       <div class="field">
-        <label>UTC ±, ч</label>
-        <input type="number" v-model.number="form.tz" step="0.5" required />
+        <label :for="`${fieldId}-tz`">UTC ±, ч</label>
+        <input :id="`${fieldId}-tz`" type="number" v-model.number="form.tz" step="any" required />
       </div>
     </div>
 
