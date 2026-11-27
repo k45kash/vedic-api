@@ -4,6 +4,7 @@ import reference from '~content/panchanga.json'
 import tithis from '~content/tithi.json'
 
 import { ApiError } from '~/composables/useApi'
+import { nakName, taraFor } from '~/composables/useJyotish'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
 useHead({ title: 'Панчанга на день · Vedic' })
@@ -18,6 +19,11 @@ type Timeline = { start?: string; end?: string; timezone?: string; rows: Record<
 const route = useRoute()
 const requested = route.query
 const auth = useAuth()
+const {
+  hasProfile, moonNakshatraCandidates, moonUncertainReason, fetchHoroscope,
+  loading: birthLoading, error: birthError,
+} = useBirthProfile()
+onMounted(() => { if (hasProfile.value) fetchHoroscope() })
 
 function redirectExpiredSession(error: unknown) {
   if (!(error instanceof ApiError) || error.status !== 401) return false
@@ -244,6 +250,25 @@ function shortLabel(key: string, r: Interval) {
 }
 const current = computed(() => Object.fromEntries(Object.entries(timeline.value?.rows ?? {}).map(([key,rows]) =>
   [key, rows.find(r => ms(r.dt_start) <= instant.value && instant.value < ms(r.dt_end))])))
+const taraColors = { good: '#d6e7e1', bad: '#f6ceca', neutral: '#ffe3ab' }
+const taraTrack = computed(() => (timeline.value?.rows.nakshatra ?? []).flatMap((interval, i) => {
+  const nak = interval.num
+  if (!hasProfile.value || !moonNakshatraCandidates.value.length || !nak || nak < 1 || nak > 27) return []
+
+  const variants = moonNakshatraCandidates.value.map(janma => ({ janma, tara: taraFor(janma, nak) }))
+  const quality = variants[0].tara.quality
+  const sameQuality = variants.every(({ tara }) => tara.quality === quality)
+  return [{
+    interval,
+    variants,
+    names: [...new Set(variants.map(({ tara }) => tara.name))].join(' / '),
+    style: {
+      ...block(interval, 'nakshatra', i),
+      background: sameQuality && moonUncertainReason.value !== 'boundary' ? taraColors[quality] : '#e3e6ec',
+    },
+  }]
+}))
+const activeTara = computed(() => taraTrack.value.find(({ interval }) => interval === current.value.nakshatra))
 const { data: nakshatras } = useLazyAsyncData('day-nakshatra-reference', () =>
   import('~content/nakshatras.json').then(m => m.default))
 const currentNak = computed(() => nakshatras.value?.find(n => n.no === current.value.nakshatra?.num))
@@ -399,6 +424,24 @@ const karakas = computed(() => {
           <button @click="goToChange(nextChange[0].at)">К переходу</button>
         </div>
       </section>
+      <section class="panel personal-tara" aria-labelledby="personal-tara-heading">
+        <h2 id="personal-tara-heading">Тара-бала для вас</h2>
+        <p v-if="!hasProfile">Добавьте данные рождения, чтобы увидеть личную Тара-балу. <NuxtLink to="/me">Открыть профиль</NuxtLink></p>
+        <p v-else-if="birthLoading" role="status">Рассчитываем накшатру рождения…</p>
+        <p v-else-if="birthError" role="alert">Не удалось рассчитать накшатру рождения. <button type="button" @click="fetchHoroscope()">Повторить</button></p>
+        <template v-else-if="activeTara">
+          <p class="tara-context">{{ clock }} · Луна в накшатре {{ label(activeTara.interval) }} до {{ full(activeTara.interval.dt_end) }}</p>
+          <p v-if="moonUncertainReason === 'time-unknown'">Время рождения неизвестно. Показываем результат для каждой возможной накшатры рождения.</p>
+          <p v-else-if="moonUncertainReason === 'boundary'">Накшатра рождения может зависеть от метода расчёта или точности времени. Результат предварительный. <NuxtLink to="/me">Подробнее в профиле</NuxtLink></p>
+          <ul>
+            <li v-for="{ janma, tara } in activeTara.variants" :key="janma">
+              <strong>{{ tara.name }}</strong> · {{ tara.short }}
+              <small>Накшатра рождения · {{ nakName(janma) }}</small>
+            </li>
+          </ul>
+        </template>
+        <p v-else>Для выбранного момента нет данных о Тара-бале.</p>
+      </section>
       <details v-if="dayEvents.length" class="panel day-events">
         <summary>Переходы дня</summary>
         <ol>
@@ -418,9 +461,21 @@ const karakas = computed(() => {
       <div class="scroll panel"><div class="scale">
         <div class="marker-layer" aria-hidden="true"><div class="marker" :class="{ 'near-end': minute > dayMinutes - 120 }" :style="{ left: minute / dayMinutes * 100 + '%' }"><span>{{ clock }}</span></div></div>
         <div class="track"><b>Часы</b><div class="axis"><span v-for="slot in hourTicks" :key="slot.epoch" :title="offsetLabel(slot.offset)" :style="{ left: slot.index / dayMinutes * 100 + '%' }">{{ Number(slot.local.slice(0,2)) }}</span></div></div>
-        <div v-for="[key,title] in visibleTracks" :key="key" class="track">
-          <b>{{ title }}</b><div class="rail" @click="pick"><span v-for="(r,i) in timeline.rows[key]" :key="r.dt_start" class="bar" :class="{ stop: r.is_bhadra || r.is_stop, active: r === current[key] }" :style="block(r,key,i)" :title="fullLabel(key,r)+' · '+full(r.dt_start)+' — '+full(r.dt_end)">{{ shortLabel(key,r) }}<small v-if="['vara','tithi','nakshatra','karana','yoga','moon'].includes(key)">{{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }}</small></span><span v-if="key === 'abhijit'" v-for="part in overlaps" :key="part.dt_start" class="overlap" :style="block(part,key,0)" title="Пересечение с Раху-калой"></span></div>
-        </div>
+        <template v-for="[key,title] in visibleTracks" :key="key">
+          <div class="track">
+            <b>{{ title }}</b><div class="rail" @click="pick"><span v-for="(r,i) in timeline.rows[key]" :key="r.dt_start" class="bar" :class="{ stop: r.is_bhadra || r.is_stop, active: r === current[key] }" :style="block(r,key,i)" :title="fullLabel(key,r)+' · '+full(r.dt_start)+' — '+full(r.dt_end)">{{ shortLabel(key,r) }}<small v-if="['vara','tithi','nakshatra','karana','yoga','moon'].includes(key)">{{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }}</small></span><span v-if="key === 'abhijit'" v-for="part in overlaps" :key="part.dt_start" class="overlap" :style="block(part,key,0)" title="Пересечение с Раху-калой"></span></div>
+          </div>
+          <div v-if="key === 'nakshatra' && taraTrack.length" class="track">
+            <b>Тара-бала для вас</b>
+            <div class="rail" @click="pick">
+              <span v-for="part in taraTrack" :key="part.interval.dt_start" class="bar"
+                :class="{ active: part === activeTara }" :style="part.style"
+                :title="part.variants.map(({ janma, tara }) => nakName(janma) + ' → ' + tara.name).join(' · ')">
+                {{ part.names }}
+              </span>
+            </div>
+          </div>
+        </template>
       </div></div>
       <div class="windows"><span v-for="k in ['rahu','abhijit']" :key="k"><template v-for="r in timeline.rows[k]" :key="r.dt_start"><strong>{{ r.name }}</strong> {{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }} </template></span></div>
       <details v-if="overlaps.length" class="panel calculation-note">
@@ -516,4 +571,10 @@ const karakas = computed(() => {
 .day-events li span, .day-events li small { display: block; }
 .day-events li small { color: var(--accent-ink); }
 .clock-choice { display: block; margin-bottom: 8px; }
+.personal-tara { padding: 12px 14px; margin-bottom: 14px; }
+.personal-tara h2 { margin: 0; font-size: 17px; }
+.personal-tara p { margin: 6px 0 0; }
+.personal-tara .tara-context, .personal-tara li small { color: var(--muted); }
+.personal-tara ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.personal-tara li small { display: block; }
 </style>
