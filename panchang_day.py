@@ -3,7 +3,7 @@ from datetime import datetime, time, timedelta
 
 import swisseph as swe
 
-from Panchangam import (calc_horas_day, calc_karanas, calc_muhurtas_day, calc_tithis,
+from Panchangam import (TITHIS, tithi_index, calc_horas_day, calc_karanas, calc_muhurtas_day, calc_tithis,
                         calc_yogas, moon_lon_sid)
 from nakshatra_calculator import SIGNS, get_aya
 from utils import NAKSHATRAS, _bisect, dt_to_jd, jd_to_local
@@ -94,3 +94,27 @@ def day_timeline(date, lat, lon, tz):
     if not visible["vara"]:
         warnings.append("Для этих суток цикл от восхода до следующего восхода недоступен.")
     return dict(date=date, rows=visible, warnings=warnings)
+
+
+def month_summary(first, lat, lon, tz):
+    """Титхи и накшатра на восходе, а также Бхадра в гражданских сутках."""
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    following = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
+    count = (following - first).days
+    start = dt_to_jd(datetime.combine(first, time.min)) - tz / 24
+    bhadra = [row for row in calc_karanas(start, start + count, tz) if row["is_bhadra"]]
+    days = []
+    for offset in range(count):
+        midnight = start + offset
+        day = first + timedelta(days=offset)
+        status, times = swe.rise_trans(midnight, swe.SUN, swe.CALC_RISE, (lon, lat, 0),
+                                       1013.25, 15., swe.FLG_SWIEPH)
+        result = dict(date=day, tithi=None, nakshatra=None,
+                      bhadra=any(row["jd_start"] < midnight + 1 and row["jd_end"] > midnight
+                                 for row in bhadra))
+        if status == 0 and midnight <= times[0] < midnight + 1:
+            sunrise = times[0]
+            result["tithi"] = TITHIS[tithi_index(sunrise)][1]
+            result["nakshatra"] = NAKSHATRAS[int(moon_lon_sid(sunrise) / (360 / 27))]["ru"]
+        days.append(result)
+    return days

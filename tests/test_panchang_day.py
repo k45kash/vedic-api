@@ -32,3 +32,17 @@ def test_geometric_and_polar_day():
     assert body["rows"]["tithi"][0]["dt_end"] != "2026-11-27T07:19:03"
     polar = client.post("/api/panchang/day", json=dict(place, lat=78, lon=15, tz=1)).json()
     assert polar["warnings"] and polar["rows"]["lagna"] == [] and polar["rows"]["yoga"]
+
+
+def test_month_summary_uses_sunrise_and_local_day():
+    response = client.post("/api/panchang/month", json=dict(place, day="2026-11-01"))
+    assert response.status_code == 200
+    days = response.json()
+    assert len(days) == 30
+    assert days[26] == {
+        "date": "2026-11-27", "tithi": "Чатуртхи", "nakshatra": "Ардра", "bhadra": True,
+    }
+
+    polar = client.post("/api/panchang/month", json=dict(place, lat=78, lon=15, tz=1)).json()
+    assert polar[26]["tithi"] is None
+    assert polar[26]["nakshatra"] is None

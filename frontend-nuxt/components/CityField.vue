@@ -12,6 +12,7 @@ const props = defineProps<{
   date: string
   /** HH:mm; влияет на ambiguous-time около переводов часов */
   time?: string
+  skipTimezoneLookup?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -63,7 +64,7 @@ function pickCity(item: { lat: string; lon: string; name: string }) {
 }
 
 async function refreshTz() {
-  if (!props.lat || !props.lon || !props.date) return
+  if (props.skipTimezoneLookup || !props.lat || !props.lon || !props.date) return
   const [y, m, d] = props.date.split('-').map(Number)
   const [hh, mm]  = (props.time || '12:00').split(':').map(Number)
   tzWarn.value = false

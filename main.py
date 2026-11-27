@@ -26,7 +26,7 @@ from varga import calc_vargas, navamsa_chart, pada_wheel
 from vimshottari import calc_vimshottari
 
 from position_mode import PositionMode, calculate_in_mode
-from panchang_day import day_timeline
+from panchang_day import day_timeline, month_summary
 from auth.db import init_db
 from auth.router import router as auth_router
 
@@ -214,6 +214,12 @@ class DayTimelineRequest(CalculationRequest):
 def panchang_day(req: DayTimelineRequest):
     result = calculate_in_mode(req.position_mode, day_timeline, req.day, req.lat, req.lon, req.tz)
     return {**result, "position_mode": req.position_mode}
+
+
+@app.post("/api/panchang/month")
+def panchang_month(req: DayTimelineRequest):
+    return calculate_in_mode(req.position_mode, month_summary, req.day.replace(day=1),
+                             req.lat, req.lon, req.tz)
 
 
 @app.post("/api/panchang")
