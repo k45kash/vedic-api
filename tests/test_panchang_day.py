@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -34,7 +35,7 @@ def client():
 
 def test_panchanga_requires_authentication():
     with TestClient(app) as guest:
-        for path in ("/api/panchang/day", "/api/panchang/month"):
+        for path in ("/api/panchang/day", "/api/panchang/month", "/api/panchang/tara-windows"):
             assert guest.post(path, json=place).status_code == 401
             response = guest.post(path, json=place, headers={"Authorization": "Bearer invalid"})
             assert response.status_code == 401
@@ -110,3 +111,24 @@ def test_automatic_stavropol_agrees_with_reference(client):
         assert [row["dt_start"] for row in reference["rows"][key]] == [
             row["dt_start"][:-6] for row in local["rows"][key]
         ]
+
+
+def test_range_picker_uses_daily_tara_bhadra_and_solar_factors(client):
+    start, end = "2026-11-27", "2026-11-28"
+    response = client.post("/api/panchang/tara-windows", json={
+        **place, "date_start": "2026-11-25", "date_end": end,
+    })
+    assert response.status_code == 200
+    daily = client.post("/api/panchang/day", json=place).json()["rows"]
+    for key, rows in response.json().items():
+        batch = [row for row in rows if row["dt_start"][:10] < end and row["dt_end"] > start + "T00:00:00"]
+        reference = [row for row in daily[key] if key != "karana" or row["is_bhadra"]]
+        assert len(batch) == len(reference), key
+        for actual, expected in zip(batch, reference):
+            assert actual.get("num") == expected.get("num") or key == "rahu"
+            for edge in ("dt_start", "dt_end"):
+                delta = datetime.fromisoformat(actual[edge]) - datetime.fromisoformat(expected[edge])
+                assert abs(delta) <= timedelta(seconds=1), (key, edge, delta)
+    assert client.post("/api/panchang/tara-windows", json={
+        **place, "date_start": start, "date_end": "2027-03-01",
+    }).status_code == 422

@@ -27,7 +27,7 @@ from varga import calc_vargas, navamsa_chart, pada_wheel
 from vimshottari import calc_vimshottari
 
 from position_mode import PositionMode, calculate_in_mode
-from panchang_day import day_timeline, month_summary
+from panchang_day import day_timeline, month_summary, tara_window_timeline
 from auth.db import init_db
 from auth.router import router as auth_router
 from auth.users import current_active_user
@@ -222,6 +222,22 @@ class DayTimelineRequest(CalculationRequest):
             return ZoneInfo(name)
         except ZoneInfoNotFoundError:
             raise HTTPException(422, "Часовой пояс недоступен. Укажите смещение вручную.")
+
+
+class TaraWindowRequest(CalculationRequest):
+    date_start: date
+    date_end: date
+    tz: float = Field(ge=-14, le=14)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+@app.post("/api/panchang/tara-windows", dependencies=[Depends(current_active_user)])
+def panchang_tara_windows(req: TaraWindowRequest):
+    if req.date_end == date.max or not 0 <= (req.date_end - req.date_start).days < 92:
+        raise HTTPException(422, "Укажите диапазон от 1 до 92 дней.")
+    return calculate_in_mode(req.position_mode, tara_window_timeline, req.date_start,
+                             req.date_end, req.lat, req.lon, req.tz)
 
 
 @app.post("/api/panchang/day", dependencies=[Depends(current_active_user)])

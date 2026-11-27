@@ -37,6 +37,62 @@ def utc_midnight(day, zone):
     return datetime.combine(day, time.min, tzinfo=zone).astimezone(timezone.utc)
 
 
+def solar_cycles(jd, limit, lat, lon):
+    def solar_event(after, event):
+        status, values = swe.rise_trans(after, swe.SUN, event, (lon, lat, 0),
+                                        1013.25, 15., swe.FLG_SWIEPH)
+        return values[0] if status == 0 else None
+
+    # Закат может прийтись на другую гражданскую дату.
+    rise = solar_event(jd - 2, swe.CALC_RISE)
+    while rise is not None and rise < limit:
+        sunset = solar_event(rise, swe.CALC_SET)
+        following = solar_event(rise + 0.001, swe.CALC_RISE)
+        if not following or not sunset or not rise < sunset < following:
+            break
+        if following > jd:
+            yield rise, sunset, following
+        rise = following
+
+
+def moon_nakshatras(jd, limit, tz):
+    return state_intervals(jd, limit, tz, lambda t: int(moon_lon_sid(t) / (360 / 27)),
+                           NAKSHATRAS, 1/24, 2)
+
+
+RAHU_SEGMENT = (2, 7, 5, 6, 4, 3, 8)
+
+
+def tara_window_timeline(first, last, lat, lon, tz):
+    """Факторы подбора времени за весь диапазон в заданном UTC-смещении."""
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    begin = datetime.combine(first, time.min)
+    end = datetime.combine(last + timedelta(days=1), time.min)
+    jd = dt_to_jd(begin) - tz / 24
+    limit = jd + (end - begin).days
+    rows = dict(nakshatra=moon_nakshatras(jd, limit, tz),
+                karana=[row for row in calc_karanas(jd - 2, limit + 2, tz) if row["is_bhadra"]],
+                vara=[], abhijit=[], rahu=[])
+    # Каждый день ищет цикл независимо, как дневная панчанга.
+    # Пропущенный восход на полярной широте не останавливает весь диапазон.
+    cycles = (cycle for offset in range((end - begin).days)
+              for cycle in solar_cycles(jd + offset, jd + offset + 1, lat, lon))
+    seen = set()
+    for rise, sunset, following in cycles:
+        dawn, dusk, next_dawn = (jd_to_local(t, tz) for t in (rise, sunset, following))
+        if dawn in seen:
+            continue
+        seen.add(dawn)
+        weekday = dawn.weekday()
+        rows["vara"].append(dict(num=weekday+1, dt_start=dawn, dt_end=next_dawn))
+        rows["abhijit"].append(calc_muhurtas_day(rise, sunset, following, tz)[7])
+        segment = RAHU_SEGMENT[weekday]
+        rows["rahu"].append(dict(dt_start=dawn+(dusk-dawn)*(segment-1)/8,
+                                 dt_end=dawn+(dusk-dawn)*segment/8))
+    return {key: [row for row in items if row["dt_start"] < end and row["dt_end"] > begin]
+            for key, items in rows.items()}
+
+
 def day_timeline(date, lat, lon, tz, zone=None):
     swe.set_sid_mode(swe.SIDM_LAHIRI)
     begin = datetime.combine(date, time.min)
@@ -57,8 +113,7 @@ def day_timeline(date, lat, lon, tz, zone=None):
     for key, calc in (("tithi", calc_tithis), ("karana", calc_karanas), ("yoga", calc_yogas)):
         rows[key] = calc(jd - 2, limit + 2, tz)
 
-    rows["nakshatra"] = state_intervals(jd, limit, tz, lambda t: int(moon_lon_sid(t) / (360 / 27)),
-                                       NAKSHATRAS, 1/24, 2)
+    rows["nakshatra"] = moon_nakshatras(jd, limit, tz)
     rows["moon"] = state_intervals(jd, limit, tz, lambda t: int(moon_lon_sid(t) / 30), SIGNS, 1/12, 4)
     warnings = []
     rows["lagna"] = []
@@ -73,36 +128,23 @@ def day_timeline(date, lat, lon, tz, zone=None):
     for key in ("vara", "light", "yama", "muhurta", "hora", "rahu", "abhijit"):
         rows[key] = []
 
-    def solar_event(after, event):
-        status, values = swe.rise_trans(after, swe.SUN, event, (lon, lat, 0),
-                                        1013.25, 15., swe.FLG_SWIEPH)
-        return values[0] if status == 0 else None
-
-    # Собираем циклы от реального восхода. Закат может прийтись и на другую гражданскую дату.
-    rise = solar_event(jd - 2, swe.CALC_RISE)
-    while rise is not None and rise < limit:
-        sunset = solar_event(rise, swe.CALC_SET)
-        following = solar_event(rise + 0.001, swe.CALC_RISE)
-        if not following or not sunset or not rise < sunset < following:
-            break
-        if following > jd:
-            dawn, dusk, next_dawn = (jd_to_local(t, tz) for t in (rise, sunset, following))
-            weekday = (dawn.replace(tzinfo=timezone.utc).astimezone(zone) if zone else dawn).weekday()
-            rows["vara"].append(dict(name=WEEK[weekday], num=weekday+1, dt_start=dawn,
-                                     dt_end=next_dawn, sunset=dusk))
-            muhurtas = calc_muhurtas_day(rise, sunset, following, tz)
-            rows["muhurta"].extend(muhurtas)
-            rows["abhijit"].append(dict(muhurtas[7], name="Абхиджит"))
-            rows["hora"].extend(calc_horas_day(rise, sunset, following, tz))
-            for name, a, b in (("День", dawn, dusk), ("Ночь", dusk, next_dawn)):
-                rows["light"].append(dict(name=name, dt_start=a, dt_end=b))
-                for n in range(8):
-                    part = dict(num=n+1, name=f"{name} · {n+1}", dt_start=a+(b-a)*n/8,
-                                dt_end=a+(b-a)*(n+1)/8)
-                    rows["yama"].append(part)
-                    if name == "День" and n+1 == (2, 7, 5, 6, 4, 3, 8)[weekday]:
-                        rows["rahu"].append(dict(part, name="Раху-кала"))
-        rise = following
+    for rise, sunset, following in solar_cycles(jd, limit, lat, lon):
+        dawn, dusk, next_dawn = (jd_to_local(t, tz) for t in (rise, sunset, following))
+        weekday = (dawn.replace(tzinfo=timezone.utc).astimezone(zone) if zone else dawn).weekday()
+        rows["vara"].append(dict(name=WEEK[weekday], num=weekday+1, dt_start=dawn,
+                                 dt_end=next_dawn, sunset=dusk))
+        muhurtas = calc_muhurtas_day(rise, sunset, following, tz)
+        rows["muhurta"].extend(muhurtas)
+        rows["abhijit"].append(dict(muhurtas[7], name="Абхиджит"))
+        rows["hora"].extend(calc_horas_day(rise, sunset, following, tz))
+        for name, a, b in (("День", dawn, dusk), ("Ночь", dusk, next_dawn)):
+            rows["light"].append(dict(name=name, dt_start=a, dt_end=b))
+            for n in range(8):
+                part = dict(num=n+1, name=f"{name} · {n+1}", dt_start=a+(b-a)*n/8,
+                            dt_end=a+(b-a)*(n+1)/8)
+                rows["yama"].append(part)
+                if name == "День" and n+1 == RAHU_SEGMENT[weekday]:
+                    rows["rahu"].append(dict(part, name="Раху-кала"))
 
     visible = {key: [r for r in items if r["dt_start"] < end and r["dt_end"] > begin]
                for key, items in rows.items()}

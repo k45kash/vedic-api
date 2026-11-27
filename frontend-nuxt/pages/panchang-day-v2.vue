@@ -5,7 +5,10 @@ import tithis from '~content/tithi.json'
 
 import { ApiError } from '~/composables/useApi'
 import { nakName, taraFor } from '~/composables/useJyotish'
-import { findTaraWindows, TARA_GOALS } from '~/calculators/tara-windows'
+import {
+  explainMissingTaraWindow, findTaraWindows, isWednesdayAbhijit, parseTaraDate as ms, TARA_FACTOR_LABELS, TARA_GOALS,
+  TARA_TIMING_LABELS, type TaraTiming, type TaraTimeline,
+} from '~/calculators/tara-windows'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
 useHead({ title: 'Панчанга на день · Vedic' })
@@ -16,7 +19,7 @@ type Interval = {
   type?: string; quality?: string; lord?: string; paksha?: string; sunset?: string
   is_bhadra?: boolean; is_stop?: boolean; day_night?: string
 }
-type Timeline = { start?: string; end?: string; timezone?: string; rows: Record<string, Interval[]>; warnings: string[] }
+type Timeline = { start?: string; end?: string; timezone?: string; rows: Record<string, Interval[]> & Record<keyof TaraTimeline, Interval[]>; warnings: string[] }
 const route = useRoute()
 const requested = route.query
 const auth = useAuth()
@@ -147,7 +150,6 @@ const selected = computed(() => clockOptions.value.find(slot => slot.epoch === s
 const minute = computed(() => selected.value?.index ?? 0)
 const instant = computed(() => selected.value?.epoch ?? NaN)
 const hourTicks = computed(() => minutes.value.filter(slot => slot.local.endsWith(':00')))
-const ms = (stamp: string) => Date.parse(/[+-]\d{2}:\d{2}$|Z$/.test(stamp) ? stamp : stamp + 'Z')
 const hhmm = (stamp: string) => stamp.slice(11, 16)
 const full = (stamp: string) => stamp.slice(8,10) + '.' + stamp.slice(5,7) + ' ' + hhmm(stamp)
 const offsetLabel = (offset: number) => {
@@ -162,6 +164,16 @@ function selectMinute(n: number) {
   clockHint.value = ''
   clock.value = slot.local
   selectedEpoch.value = slot.epoch
+}
+const timelinePanel = ref<HTMLElement | null>(null)
+function showMinuteOnScale(epoch: number) {
+  const index = (epoch - windowStart.value) / 60000
+  selectMinute(index)
+  const panel = timelinePanel.value
+  if (!panel) return
+  panel.scrollLeft = panel.scrollWidth * index / dayMinutes.value - panel.clientWidth / 2
+  panel.scrollIntoView({ block: 'center' })
+  panel.focus({ preventScroll: true })
 }
 function changeTimezoneMode(event: Event) {
   const manual = (event.target as HTMLInputElement).checked
@@ -187,10 +199,18 @@ function pick(e: MouseEvent) {
   const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
   selectMinute((e.clientX - box.left) / box.width * dayMinutes.value)
 }
-function shift(n: number) {
+function chooseDay(value: string) {
+  if (!value) return
   clockHint.value = ''
-  day.value = new Date(dateMs.value + n * 86400000).toISOString().slice(0,10)
+  if (day.value !== value) selectedEpoch.value = NaN
+  day.value = value
 }
+function shift(n: number) { chooseDay(new Date(dateMs.value + n * 86400000).toISOString().slice(0,10)) }
+const longDate = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+})
+const shortDate = new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'short' })
+const todayDate = computed(() => (zonedFormat.value ? localStamp(Date.now()) : localNow()).slice(0,10))
 function today() {
   const now = zonedFormat.value ? localStamp(Date.now()) : localNow()
   clockHint.value = ''
@@ -220,7 +240,15 @@ watch([query, selected, timeline, mobile, showChart], ([q, slot, data], _, clean
   cleanup(() => { live = false; clearTimeout(timer) })
 }, { immediate: true })
 
-function openMonth() { month.value = day.value.slice(0,7); monthOpen.value = !monthOpen.value }
+function openMonth() {
+  if (!monthOpen.value) month.value = day.value.slice(0,7)
+  monthOpen.value = !monthOpen.value
+}
+function shiftMonth(delta: number) {
+  const date = new Date((month.value || day.value.slice(0, 7)) + '-01T00:00Z')
+  date.setUTCMonth(date.getUTCMonth() + delta)
+  month.value = date.toISOString().slice(0, 7)
+}
 const monthDays = computed(() => {
   if (!month.value) return []
   const first = new Date(month.value + '-01T00:00Z')
@@ -341,35 +369,27 @@ const abhijitComparison = computed(() => {
   })
 })
 const overlaps = computed(() => abhijitComparison.value.flatMap(item => item.overlaps))
-function isWednesdayAbhijit(interval: Interval) {
-  const start = ms(interval.dt_start)
-  return timeline.value?.rows.vara.some(day =>
-    day.num === 3 && ms(day.dt_start) <= start && start < ms(day.dt_end)
-  ) ?? false
-}
-const hasWednesdayAbhijit = computed(() => abhijitComparison.value.some(({ abhijit }) => isWednesdayAbhijit(abhijit)))
-const goalIndex = ref(0)
-const eventDuration = ref(30)
-const windowLabels = {
-  rahu: 'Действует Раху-кала',
-  bhadra: 'Действует Бхадра',
-  abhijit: 'Действует Абхиджит',
-  wednesday: 'Абхиджит в среду · по курсу не рекомендуется для важных начинаний',
-}
+const hasWednesdayAbhijit = computed(() => abhijitComparison.value.some(({ abhijit }) =>
+  isWednesdayAbhijit(abhijit, timeline.value?.rows.vara ?? []),
+))
+const initialGoal = TARA_GOALS.findIndex(goal => goal.id === requested.goal)
+const goalIndex = ref(initialGoal < 0 ? 0 : initialGoal)
+const selectedGoal = computed(() => TARA_GOALS[goalIndex.value])
+const initialDuration = typeof requested.duration === 'string' ? Number(requested.duration) : NaN
+const eventDuration = ref(Number.isInteger(initialDuration) && initialDuration >= 1 && initialDuration <= 1500 ? initialDuration : 30)
+const timing = ref<TaraTiming>(requested.timing === 'start' || requested.timing === 'whole' ? requested.timing : selectedGoal.value.timing)
+watch(selectedGoal, goal => { timing.value = goal.timing })
+const windowDay = computed(() => ({ start: windowStart.value, end: windowStart.value + dayMinutes.value * 60000 }))
 const windowChoices = computed(() => {
   const rows = timeline.value?.rows
-  const goal = TARA_GOALS[goalIndex.value]
-  if (!rows?.vara.length || !goal || moonUncertainReason.value === 'boundary') return []
-  const day = { start: windowStart.value, end: windowStart.value + dayMinutes.value * 60000 }
-  const bounds = (interval: Interval) => ({ start: ms(interval.dt_start), end: ms(interval.dt_end) })
-  return findTaraWindows(day, taraTrack.value.map(({ interval, variants }) => ({
-    ...bounds(interval), taras: variants.map(({ tara }) => tara),
-  })), [
-    ...rows.rahu.map(row => ({ ...bounds(row), kind: 'rahu' as const })),
-    ...rows.karana.filter(row => row.is_bhadra).map(row => ({ ...bounds(row), kind: 'bhadra' as const })),
-    ...rows.abhijit.map(row => ({ ...bounds(row), kind: isWednesdayAbhijit(row) ? 'wednesday' as const : 'abhijit' as const })),
-  ], goal, eventDuration.value)
+  if (!rows || moonUncertainReason.value === 'boundary') return []
+  return findTaraWindows(
+    windowDay.value, rows, moonNakshatraCandidates.value, selectedGoal.value, eventDuration.value, timing.value,
+  )
 })
+const emptyWindowReason = computed(() => timeline.value
+  ? explainMissingTaraWindow(windowDay.value, timeline.value.rows, moonNakshatraCandidates.value, selectedGoal.value)
+  : '')
 function windowClock(epoch: number) {
   const stamp = localStamp(epoch)
   // Ручной режим использует местные отметки как UTC, автоматический — реальные моменты.
@@ -409,8 +429,28 @@ const karakas = computed(() => {
 </script>
 <template>
   <article class="pd">
-    <header class="heading"><div><p>{{ place.city }} · {{ offsetLabel(selected?.offset ?? place.tz) }} · {{ mode === 'apparent' ? 'Видимые положения' : 'Геометрические положения' }}</p></div>
-      <div class="buttons"><button @click="today">Сегодня</button><button @click="openMonth">На месяц</button><button @click="settings = !settings" :aria-expanded="settings">Место и расчёт</button><button @click="share">Ссылка для сверки</button></div>
+    <nav class="day-nav panel" aria-label="Переключение дней">
+      <div class="day-stepper">
+        <button type="button" @click="shift(-1)" aria-label="Предыдущий день">
+          <span aria-hidden="true">‹</span><span>Назад<small>{{ shortDate.format(dateMs - 86400000) }}</small></span>
+        </button>
+        <div class="day-heading">
+          <strong aria-live="polite">{{ longDate.format(dateMs) }}</strong>
+          <small>{{ place.city }} · {{ offsetLabel(selected?.offset ?? place.tz) }}</small>
+        </div>
+        <button type="button" @click="shift(1)" aria-label="Следующий день">
+          <span>Вперёд<small>{{ shortDate.format(dateMs + 86400000) }}</small></span><span aria-hidden="true">›</span>
+        </button>
+      </div>
+      <div class="day-controls">
+        <button type="button" :class="{ chosen: day === todayDate }" @click="today">Сегодня</button>
+        <label>Дата <input type="date" :value="day" @change="chooseDay(($event.target as HTMLInputElement).value)"></label>
+        <button type="button" @click="openMonth" :aria-expanded="monthOpen" aria-controls="panchang-month">Календарь месяца</button>
+        <label>Местное время <input aria-label="Местное время" type="time" :value="clock" @change="changeClock"></label>
+      </div>
+    </nav>
+    <header class="heading"><p>{{ mode === 'apparent' ? 'Видимые положения' : 'Геометрические положения' }}</p>
+      <div class="buttons"><button @click="settings = !settings" :aria-expanded="settings">Место и расчёт</button><button @click="share">Ссылка для сверки</button></div>
     </header>
     <div v-if="shareUrl" class="share">
       <span role="status">{{ sharedStatus }}</span>
@@ -425,10 +465,15 @@ const karakas = computed(() => {
       <small>{{ manualTz ? 'Одно смещение на все сутки' : (timeline?.timezone ?? 'Зона определяется по координатам') }}</small>
       <PositionModeField v-model="mode" />
     </section>
-    <section v-if="monthOpen" class="panel month"><label>Месяц <input type="month" v-model="month"></label>
+    <section v-if="monthOpen" id="panchang-month" class="panel month">
+      <div class="month-controls">
+        <button type="button" aria-label="Предыдущий месяц" @click="shiftMonth(-1)">‹</button>
+        <label>Месяц <input type="month" v-model="month"></label>
+        <button type="button" aria-label="Следующий месяц" @click="shiftMonth(1)">›</button>
+      </div>
       <p v-if="monthStatus" role="status">{{ monthStatus }}</p>
       <div class="monthgrid"><b v-for="w in ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']" :key="w">{{ w }}</b>
-        <template v-for="(d,i) in monthDays" :key="i"><button v-if="d" :class="{ chosen: d===day }" @click="day=d; monthOpen=false"><strong>{{ Number(d.slice(-2)) }}</strong>
+        <template v-for="(d,i) in monthDays" :key="i"><button v-if="d" :class="{ chosen: d===day }" :aria-pressed="d===day" :aria-current="d===todayDate ? 'date' : undefined" :aria-label="longDate.format(new Date(d + 'T00:00Z'))" @click="chooseDay(d); monthOpen=false"><strong>{{ Number(d.slice(-2)) }}</strong>
           <template v-if="monthData[d]">
             <small>{{ monthData[d].tithi ?? 'Восхода нет' }}</small>
             <small>{{ monthData[d].nakshatra }}</small>
@@ -437,9 +482,6 @@ const karakas = computed(() => {
         </button><span v-else /></template>
       </div>
     </section>
-    <div class="toolbar"><button aria-label="Предыдущий день" @click="shift(-1)">‹</button><input aria-label="Дата" type="date" :value="day" @change="day=($event.target as HTMLInputElement).value || day"><button aria-label="Следующий день" @click="shift(1)">›</button>
-      <label>Местное время <input aria-label="Местное время" type="time" :value="clock" @change="changeClock"></label>
-    </div>
     <label v-if="clockOptions.length > 1" class="clock-choice">Повтор часа
       <select :value="minute" @change="selectMinute(Number(($event.target as HTMLSelectElement).value))">
         <option v-for="(slot,index) in clockOptions" :key="slot.epoch" :value="slot.index">{{ index + 1 }}-е вхождение · {{ offsetLabel(slot.offset) }}</option>
@@ -463,6 +505,27 @@ const karakas = computed(() => {
           <button @click="goToChange(nextChange[0].at)">К переходу</button>
         </div>
       </section>
+      <button v-if="mobile" class="track-toggle" :aria-expanded="extraTracks" @click="extraTracks = !extraTracks">{{ extraTracks ? 'Свернуть дополнительные ряды' : 'Показать дополнительные ряды' }}</button>
+      <label class="minute-slider">Минута на шкале <input type="range" min="0" :max="dayMinutes - 1" :value="minute" :aria-valuetext="clockOptions.length > 1 && selected ? clock + ' · ' + offsetLabel(selected.offset) : clock" @input="selectMinute(Number(($event.target as HTMLInputElement).value))"></label>
+      <div ref="timelinePanel" class="scroll panel" tabindex="-1" role="region" aria-label="Таблица Панчанги"><div class="scale">
+        <div class="marker-layer" aria-hidden="true"><div class="marker" :class="{ 'near-end': minute > dayMinutes - 120 }" :style="{ left: minute / dayMinutes * 100 + '%' }"><span>{{ clock }}</span></div></div>
+        <div class="track"><b>Часы</b><div class="axis"><span v-for="slot in hourTicks" :key="slot.epoch" :title="offsetLabel(slot.offset)" :style="{ left: slot.index / dayMinutes * 100 + '%' }">{{ Number(slot.local.slice(0,2)) }}</span></div></div>
+        <template v-for="[key,title] in visibleTracks" :key="key">
+          <div class="track">
+            <b>{{ title }}</b><div class="rail" @click="pick"><span v-for="(r,i) in timeline.rows[key]" :key="r.dt_start" class="bar" :class="{ stop: r.is_bhadra || r.is_stop, active: r === current[key] }" :style="block(r,key,i)" :title="fullLabel(key,r)+' · '+full(r.dt_start)+' — '+full(r.dt_end)">{{ shortLabel(key,r) }}<small v-if="['vara','tithi','nakshatra','karana','yoga','moon'].includes(key)">{{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }}</small></span><span v-if="key === 'abhijit'" v-for="part in overlaps" :key="part.dt_start" class="overlap" :style="block(part,key,0)" title="Пересечение с Раху-калой"></span></div>
+          </div>
+          <div v-if="key === 'nakshatra' && taraTrack.length" class="track">
+            <b>Тара-бала для вас</b>
+            <div class="rail" @click="pick">
+              <span v-for="part in taraTrack" :key="part.interval.dt_start" class="bar"
+                :class="{ active: part === activeTara, stop: part.variants.some(({ tara }) => tara.schoolAvoid) }" :style="part.style"
+                :title="part.variants.map(({ janma, tara }) => nakName(janma) + ' → ' + tara.name + (tara.schoolAvoid ? ' · ' + tara.pos + '-я от рождения, предупреждение курса' : '')).join(' · ')">
+                {{ part.names }}
+              </span>
+            </div>
+          </div>
+        </template>
+      </div></div>
       <section class="panel personal-tara" aria-labelledby="personal-tara-heading">
         <h2 id="personal-tara-heading">Тара-бала для вас</h2>
         <p v-if="!hasProfile">Добавьте данные рождения, чтобы увидеть личную Тара-балу. <NuxtLink to="/me">Открыть профиль</NuxtLink></p>
@@ -485,7 +548,7 @@ const karakas = computed(() => {
         </template>
         <p v-else>Для выбранного момента нет данных о Тара-бале.</p>
       </section>
-      <details class="panel calculation-note time-picker">
+      <details class="panel calculation-note time-picker" :open="requested.goal !== undefined || undefined">
         <summary>Подобрать время внутри дня</summary>
         <p v-if="!hasProfile">Для подбора по Тара-бале укажите <NuxtLink to="/me">данные рождения</NuxtLink>.</p>
         <p v-else-if="birthLoading">Рассчитываем накшатру рождения…</p>
@@ -498,23 +561,35 @@ const karakas = computed(() => {
               <option v-for="(goal, index) in TARA_GOALS" :key="goal.label" :value="index">{{ goal.label }}</option>
             </select></label>
             <label>Длительность, мин <input v-model.number="eventDuration" type="number" min="1" :max="dayMinutes" step="1"></label>
+            <label>Проверять
+              <select v-model="timing">
+                <option v-for="(name, value) in TARA_TIMING_LABELS" :key="value" :value="value">{{ name }}</option>
+              </select>
+            </label>
           </div>
-          <p>Учитываются Тара-бала, Раху-кала, Бхадра и Абхиджит. Окна с предупреждениями идут после остальных.</p>
+          <p>Тара, Раху-кала, Бхадра и предупреждения школы проверяются {{ timing === 'start' ? 'в момент начала' : 'на протяжении всего события' }}. Смена Абхиджит сама по себе не ограничивает диапазон старта.</p>
           <p v-if="moonUncertainReason === 'time-unknown'">Подходящая для цели тара нужна при каждом возможном варианте накшатры рождения.</p>
           <p v-if="!Number.isInteger(eventDuration) || eventDuration < 1 || eventDuration > dayMinutes">Укажите целое число минут в пределах выбранных суток.</p>
           <ul v-else-if="windowChoices.length">
-            <li v-for="choice in windowChoices" :key="choice.start">
-              <button type="button" @click="selectMinute((choice.start - windowStart) / 60000)"
-                :aria-label="'Выбрать начало в ' + windowClock(choice.start)">{{ windowClock(choice.start) }}–{{ windowClock(choice.end) }}</button>
+            <li v-for="choice in windowChoices" :key="choice.firstStart">
               <div>
-                <strong>{{ choice.names.join(' / ') }}</strong> · {{ TARA_GOALS[goalIndex].reason }}
-                <p v-for="flag in choice.flags" :key="flag" :class="{ 'school-warning': flag !== 'abhijit' }">{{ windowLabels[flag] }}</p>
-                <p v-if="!choice.flags.length">Вне Раху-калы, Бхадры и Абхиджит.</p>
+                <strong>Начать {{ windowClock(choice.firstStart) }}<template v-if="choice.lastStart !== choice.firstStart">–{{ windowClock(choice.lastStart) }}</template></strong>
+                <p>{{ choice.names.join(' / ') }} · {{ selectedGoal.reason }}</p>
+                <p v-if="choice.beginsInAbhijit">Первый старт приходится на Абхиджит.</p>
+                <p v-for="flag in choice.warnings" :key="flag" class="school-warning">
+                  {{ TARA_FACTOR_LABELS[flag] }}<template v-if="flag === 'wednesday'"> · по курсу лучше отложить важное начинание</template>
+                </p>
                 <p v-if="choice.schoolPositions.length" class="school-warning">По курсу лучше отложить важный старт · {{ choice.schoolPositions.join(' / ') }}-я позиция от рождения.</p>
+                <details v-if="choice.changes.length">
+                  <summary>Что меняется при первом старте</summary>
+                  <p v-for="change in choice.changes" :key="change.at + change.label">{{ windowClock(change.at) }} · {{ change.label }}</p>
+                </details>
               </div>
+              <button type="button" @click="showMinuteOnScale(choice.firstStart)"
+                :aria-label="'Выбрать начало в ' + windowClock(choice.firstStart)">На шкалу</button>
             </li>
           </ul>
-          <p v-else>На выбранную дату нет окна, подходящего по Тара-бале для этой цели и длительности.</p>
+          <p v-else>{{ emptyWindowReason }}</p>
         </template>
       </details>
       <details v-if="dayEvents.length" class="panel day-events">
@@ -531,27 +606,6 @@ const karakas = computed(() => {
           </li>
         </ol>
       </details>
-      <button v-if="mobile" class="track-toggle" :aria-expanded="extraTracks" @click="extraTracks = !extraTracks">{{ extraTracks ? 'Свернуть дополнительные ряды' : 'Показать дополнительные ряды' }}</button>
-      <label class="minute-slider">Минута на шкале <input type="range" min="0" :max="dayMinutes - 1" :value="minute" :aria-valuetext="clockOptions.length > 1 && selected ? clock + ' · ' + offsetLabel(selected.offset) : clock" @input="selectMinute(Number(($event.target as HTMLInputElement).value))"></label>
-      <div class="scroll panel"><div class="scale">
-        <div class="marker-layer" aria-hidden="true"><div class="marker" :class="{ 'near-end': minute > dayMinutes - 120 }" :style="{ left: minute / dayMinutes * 100 + '%' }"><span>{{ clock }}</span></div></div>
-        <div class="track"><b>Часы</b><div class="axis"><span v-for="slot in hourTicks" :key="slot.epoch" :title="offsetLabel(slot.offset)" :style="{ left: slot.index / dayMinutes * 100 + '%' }">{{ Number(slot.local.slice(0,2)) }}</span></div></div>
-        <template v-for="[key,title] in visibleTracks" :key="key">
-          <div class="track">
-            <b>{{ title }}</b><div class="rail" @click="pick"><span v-for="(r,i) in timeline.rows[key]" :key="r.dt_start" class="bar" :class="{ stop: r.is_bhadra || r.is_stop, active: r === current[key] }" :style="block(r,key,i)" :title="fullLabel(key,r)+' · '+full(r.dt_start)+' — '+full(r.dt_end)">{{ shortLabel(key,r) }}<small v-if="['vara','tithi','nakshatra','karana','yoga','moon'].includes(key)">{{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }}</small></span><span v-if="key === 'abhijit'" v-for="part in overlaps" :key="part.dt_start" class="overlap" :style="block(part,key,0)" title="Пересечение с Раху-калой"></span></div>
-          </div>
-          <div v-if="key === 'nakshatra' && taraTrack.length" class="track">
-            <b>Тара-бала для вас</b>
-            <div class="rail" @click="pick">
-              <span v-for="part in taraTrack" :key="part.interval.dt_start" class="bar"
-                :class="{ active: part === activeTara, stop: part.variants.some(({ tara }) => tara.schoolAvoid) }" :style="part.style"
-                :title="part.variants.map(({ janma, tara }) => nakName(janma) + ' → ' + tara.name + (tara.schoolAvoid ? ' · ' + tara.pos + '-я от рождения, предупреждение курса' : '')).join(' · ')">
-                {{ part.names }}
-              </span>
-            </div>
-          </div>
-        </template>
-      </div></div>
       <div class="windows"><span v-for="k in ['rahu','abhijit']" :key="k"><template v-for="r in timeline.rows[k]" :key="r.dt_start"><strong>{{ r.name }}</strong> {{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }} </template></span></div>
       <p v-if="hasWednesdayAbhijit" class="school-warning">Абхиджит в среду · по правилам курса не рекомендуется для важных начинаний.</p>
       <details v-if="abhijitComparison.length" class="panel calculation-note">
@@ -626,8 +680,9 @@ const karakas = computed(() => {
   .pd { min-width: 0; }
   .overview dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scale { --track-label-width: 95px; }
-  .month { overflow: auto; }
-  .monthgrid { min-width: 490px; }
+  .month { padding: 8px; }
+  .monthgrid button { padding: 3px; }
+  .monthgrid small { font-size: 10px; }
 }
 
 .axis { position: relative; min-height: 17px; }
@@ -648,7 +703,24 @@ const karakas = computed(() => {
 .day-events li span, .day-events li small { display: block; }
 .day-events li small { color: var(--accent-ink); }
 .clock-choice { display: block; margin-bottom: 8px; }
-.personal-tara { padding: 12px 14px; margin-bottom: 14px; }
+.personal-tara { padding: 12px 14px; margin: 14px 0; overflow-wrap: anywhere; }
+.day-nav { margin: 0 0 10px; padding: 12px; }
+.day-stepper { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: stretch; gap: 8px; }
+.day-stepper button { display: flex; gap: 6px; align-items: center; }
+.day-stepper button > span[aria-hidden] { font-size: 22px; line-height: 1; }
+.day-stepper small, .day-heading small { display: block; color: var(--muted); }
+.day-heading { align-self: center; text-align: center; font-size: clamp(15px, 2.5vw, 22px); }
+.day-heading strong { text-transform: capitalize; }
+.day-heading small { font-size: 13px; }
+.day-controls, .month-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.day-controls { margin-top: 10px; }
+.day-controls label:last-child { margin-left: auto; }
+.monthgrid button[aria-current="date"] { outline: 1px solid var(--accent-ink); outline-offset: -2px; }
+@media(max-width: 520px) {
+  .day-nav { padding: 8px; }
+  .day-stepper button { padding: 5px; gap: 3px; font-size: 12px; }
+  .day-controls label:last-child { margin-left: 0; }
+}
 .personal-tara h2 { margin: 0; font-size: 17px; }
 .personal-tara p { margin: 6px 0 0; }
 .personal-tara .tara-context, .personal-tara li small { color: var(--muted); }

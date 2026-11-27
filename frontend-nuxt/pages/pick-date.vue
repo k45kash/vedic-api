@@ -21,6 +21,10 @@ import type {
   EventDef, EventScoreResult, EventVerdictLevel, Paksha, ScoreLine, WeekdayRu,
 } from '~/composables/useJyotish'
 import { dayKalams, type KalamKey, type KalamPeriod } from '~/utils/kalam'
+import {
+  explainMissingTaraWindow, findTaraWindows, TARA_FACTOR_LABELS, TARA_GOALS, TARA_TIMING_LABELS,
+  type TaraTimeline, type TaraTiming, type TaraWindow,
+} from '~/calculators/tara-windows'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
 useHead({ title: 'Подобрать дату — Jyotish' })
@@ -127,7 +131,10 @@ const EVENT_GROUPS: Array<{ title: string; ids: string[] }> = [
 
 const api = useApi()
 const { setPageHeader } = usePageHeader()
-const { profile, hasProfile, fetchHoroscope } = useBirthProfile()
+const {
+  profile, hasProfile, fetchHoroscope, moonNakshatraCandidates, moonUncertainReason,
+  loading: birthLoading,
+} = useBirthProfile()
 const { janmaNakshatra, janmaNakshatraName } = useJyotish()
 // Дисклеймеры достоверности и вводные абзацы — из content/ (задача 2.8).
 const { disclaimer } = useDisclaimers()
@@ -150,6 +157,17 @@ const place = computed(() => {
 // Событие
 const events = ref<EventDef[]>([])
 const eventId = ref('wedding')
+const goalId = ref('')
+const eventDuration = ref(30)
+const timing = ref<TaraTiming>('whole')
+const windowGoal = computed(() => TARA_GOALS.find(goal => goal.id === goalId.value))
+const eventGoals: Record<string, string> = {
+  contract: 'contract', business: 'contract', newproject: 'project', factory: 'project',
+  construction: 'project', renovation: 'renovation', education: 'study', cleaning: 'completion',
+}
+watch(eventId, event => { goalId.value = eventGoals[event] ?? '' })
+watch(windowGoal, goal => { if (goal) timing.value = goal.timing })
+const durationValid = computed(() => Number.isInteger(eventDuration.value) && eventDuration.value >= 1 && eventDuration.value <= 1440)
 const query = ref('')
 const currentEvent = computed<EventDef | null>(
   () => events.value.find((e) => e.id === eventId.value) ?? null,
@@ -220,6 +238,37 @@ let loadToken = 0
 const dataKey = computed(() => [
   from.value, to.value, place.value.lat, place.value.lon, place.value.tz,
 ].join('|'))
+
+const windowTimeline = ref<TaraTimeline | null>(null)
+const windowTimelineKey = ref('')
+const windowLoading = ref(false)
+const windowError = ref('')
+const retryWindows = ref(0)
+const canCalculateWindows = computed(() => Boolean(windowGoal.value && hasProfile.value &&
+  moonNakshatraCandidates.value.length && moonUncertainReason.value !== 'boundary' && !rangeError.value))
+
+watch([dataKey, canCalculateWindows, retryWindows], async ([key, enabled], _, cleanup) => {
+  windowLoading.value = false
+  windowError.value = ''
+  if (!enabled || windowTimelineKey.value === key) return
+  let live = true
+  cleanup(() => { live = false })
+  windowLoading.value = true
+  const { lat, lon, tz } = place.value
+  try {
+    const data = await api.post<TaraTimeline>('/api/panchang/tara-windows', {
+      date_start: from.value, date_end: to.value, lat, lon, tz, position_mode: 'apparent',
+    })
+    if (live) {
+      windowTimeline.value = data
+      windowTimelineKey.value = key
+    }
+  } catch {
+    if (live) windowError.value = 'Не удалось рассчитать время в выбранном диапазоне.'
+  } finally {
+    if (live) windowLoading.value = false
+  }
+}, { immediate: true })
 
 async function load(force = false) {
   if (rangeError.value) return
@@ -481,16 +530,34 @@ function tithiLabel(r: DayRow) {
 
 // ─── Разбор выбранного дня ──────────────────────────────────────────────────
 
-const panchangaLink = computed(() => {
-  const row = selected.value
-  if (!row) return ''
+const windowsByDate = computed<Record<string, { choices: TaraWindow[]; emptyReason: string }>>(() => {
+  const timeline = windowTimeline.value
+  const goal = windowGoal.value
+  if (!canCalculateWindows.value || !durationValid.value || !timeline
+    || windowTimelineKey.value !== dataKey.value || !goal) return {}
+  return Object.fromEntries(rows.value.map(row => {
+    const start = Date.parse(row.iso + 'T00:00Z')
+    const end = start + 86400000
+    const day = { start, end }
+    const candidates = moonNakshatraCandidates.value
+    const choices = findTaraWindows(day, timeline, candidates, goal, eventDuration.value, timing.value).slice(0, 3)
+    return [row.iso, { choices, emptyReason: choices.length ? '' : explainMissingTaraWindow(day, timeline, candidates, goal) }]
+  }))
+})
+function formatStart(epoch: number) { return new Date(epoch).toISOString().slice(11, 16) }
+function openPanchanga(row: DayRow, choice?: TaraWindow) {
   const { city, lat, lon, tz } = place.value
   const params = new URLSearchParams({
-    date: row.iso, time: row.scoreTime, city,
+    date: row.iso, time: choice ? formatStart(choice.firstStart) : row.scoreTime, city,
     lat: String(lat), lon: String(lon), tz: String(tz), mode: 'apparent',
   })
+  if (windowGoal.value && durationValid.value) {
+    params.set('goal', windowGoal.value.id)
+    params.set('duration', String(eventDuration.value))
+    params.set('timing', timing.value)
+  }
   return '/panchang-day-v2?' + params.toString()
-})
+}
 
 function bhadraTime(stamp: string, date: string) {
   const time = stamp.slice(11, 19)
@@ -605,6 +672,27 @@ const updatedLabel = computed(() =>
 
         <UiDisclaimer v-if="rangeError" tone="warn">{{ rangeError }}</UiDisclaimer>
         <UiKv v-else k="Дней в диапазоне" :v="String(rangeLen)" />
+        <div class="pd-time-controls">
+          <label class="pd-field">
+            <span>Цель подбора времени</span>
+            <select v-model="goalId" class="pd-input">
+              <option value="">Только даты</option>
+              <option v-for="goal in TARA_GOALS" :key="goal.id" :value="goal.id">{{ goal.label }}</option>
+            </select>
+          </label>
+          <template v-if="windowGoal">
+            <label class="pd-field">
+              <span>Длительность, мин</span>
+              <input v-model.number="eventDuration" class="pd-input" type="number" min="1" max="1440" step="1">
+            </label>
+            <label class="pd-field">
+              <span>Проверять</span>
+              <select v-model="timing" class="pd-input">
+                <option v-for="(name, value) in TARA_TIMING_LABELS" :key="value" :value="value">{{ name }}</option>
+              </select>
+            </label>
+          </template>
+        </div>
         <UiKv k="Место расчёта" :v="place.city" />
         <UiKv
           k="Джанма-накшатра"
@@ -708,7 +796,7 @@ const updatedLabel = computed(() =>
           :title="`${fmtDate(selected.date)}, ${selected.weekday.toLowerCase()}`"
           :subtitle="currentEvent.name"
         >
-          <NuxtLink :to="panchangaLink" class="btn btn--ghost">
+          <NuxtLink :to="openPanchanga(selected)" class="btn btn--ghost">
             <UiIcon name="calendar" style="width:15px;height:15px" />
             Открыть день в Панчанге
           </NuxtLink>
@@ -877,10 +965,19 @@ const updatedLabel = computed(() =>
           </div>
         </template>
 
+        <template v-if="windowGoal">
+          <p v-if="!durationValid" role="status">Укажите длительность от 1 до 1440 минут.</p>
+          <p v-else-if="!hasProfile">Для окон по Тара-бале заполните <NuxtLink to="/me">профиль рождения</NuxtLink>.</p>
+          <p v-else-if="birthLoading" role="status">Рассчитываем накшатру рождения…</p>
+          <p v-else-if="moonUncertainReason === 'boundary'">Для подбора времени уточните пограничную накшатру в профиле.</p>
+          <p v-else-if="!moonNakshatraCandidates.length">Для подбора времени нужны данные о накшатре рождения.</p>
+          <p v-else-if="windowLoading" role="status">Подбираем время в выбранных датах…</p>
+          <p v-else-if="windowError" role="alert">{{ windowError }} <UiButton @click="retryWindows++">Повторить</UiButton></p>
+          <p v-else class="pd-window-note">До трёх окон на дату по Тара-бале и факторам времени. Оценка даты на восходе показана отдельно. Используется смещение {{ place.tz >= 0 ? '+' : '' }}{{ place.tz }} UTC.</p>
+        </template>
         <div class="pd-list">
+          <div v-for="r in sortedRows" :key="r.iso" class="pd-result-day">
           <button
-            v-for="r in sortedRows"
-            :key="r.iso"
             type="button"
             class="pd-row"
             :class="{
@@ -936,6 +1033,18 @@ const updatedLabel = computed(() =>
 
             <span v-else class="pd-row__fail">{{ r.problem }}</span>
           </button>
+          <ul v-if="windowsByDate[r.iso]?.choices.length" class="pd-windows" aria-label="Допустимое время начала">
+            <li v-for="choice in windowsByDate[r.iso]?.choices" :key="choice.firstStart">
+              <NuxtLink :to="openPanchanga(r, choice)">
+                {{ formatStart(choice.firstStart) }}<template v-if="choice.firstStart !== choice.lastStart">–{{ formatStart(choice.lastStart) }}</template>
+              </NuxtLink>
+              <span>{{ choice.names.join(' / ') }}<template v-if="choice.warnings.length"> · {{ choice.warnings.map(flag => TARA_FACTOR_LABELS[flag]).join(', ') }}</template><template v-if="choice.schoolPositions.length"> · предупреждение курса ({{ choice.schoolPositions.join(' / ') }})</template></span>
+            </li>
+          </ul>
+          <p v-else-if="windowsByDate[r.iso]" class="pd-window-note">
+            {{ windowsByDate[r.iso]?.emptyReason }}
+          </p>
+          </div>
         </div>
       </UiCard>
 
@@ -1180,6 +1289,13 @@ const updatedLabel = computed(() =>
   gap: 6px;
 }
 
+.pd-time-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 10px 0; }
+.pd-time-controls input[type="number"] { max-width: 9rem; }
+.pd-result-day { min-width: 0; }
+.pd-windows { list-style: none; padding: 4px 0 8px; margin: 0 10px; display: flex; flex-wrap: wrap; gap: 5px 16px; }
+.pd-windows li { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 6px; font-size: 13px; }
+.pd-windows a { color: var(--accent-ink); font-weight: 700; }
+.pd-window-note { color: var(--muted); font-size: 13px; margin: 6px 10px; }
 .pd-row {
   display: grid;
   grid-template-columns: 72px minmax(140px, 1fr) 72px 42px 134px minmax(0, 1.7fr);
