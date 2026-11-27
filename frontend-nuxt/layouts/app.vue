@@ -10,6 +10,7 @@
 import type { IconName } from '~/utils/icons'
 
 const route = useRoute()
+const currentPath = computed(() => route.path.replace(/\/$/, '') || '/')
 const { header } = usePageHeader()
 const { isDark, toggleTheme } = useTheme()
 const { isPro, setAudience } = useAudience()
@@ -32,7 +33,6 @@ const navItems: readonly NavItem[] = [
   { label: 'Карта', icon: 'chart', to: '/chart' },
   { label: 'Сегодня', icon: 'sun', to: '/today' },
   { label: 'Панчанга', icon: 'calendar', to: '/panchang-day-v2' },
-  { label: 'Панчанга · эталон', icon: 'book', to: '/panchang-day' },
   { label: 'Подобрать дату', icon: 'calendar', to: '/pick-date' },
   { label: 'Совместимость', icon: 'heart', to: '/compat' },
   { label: 'Практики', icon: 'lotus', soon: true },
@@ -114,9 +114,9 @@ useHead({ bodyAttrs: { class: 'vd-scope' } })
             <NuxtLink
               v-if="item.to"
               class="nav__item"
-              :class="{ 'is-on': route.path === item.to }"
+              :class="{ 'is-on': currentPath === item.to }"
               :to="item.to"
-              :aria-current="route.path === item.to ? 'page' : undefined"
+              :aria-current="currentPath === item.to ? 'page' : undefined"
             >
               <UiIcon :name="item.icon" />
               {{ item.label }}

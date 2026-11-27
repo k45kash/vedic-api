@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Типы авто-импортом не тянем — импортируем явно, так надёжнее.
 import type { TelegramAuthPayload } from '~/composables/useAuth'
+import { LOGIN_RETURN_KEY, safeLoginReturn } from '~/utils/loginRedirect'
 
 useHead({ title: 'Вход — Vedic' })
 
@@ -13,10 +14,7 @@ const error = ref('')
 const loading = ref(false)
 
 // Куда вернуть после входа: ?redirect от middleware/auth, иначе дашборд.
-const redirectTo = computed(() => {
-  const r = route.query.redirect
-  return typeof r === 'string' && r.startsWith('/') ? r : '/dashboard'
-})
+const redirectTo = computed(() => safeLoginReturn(route.query.redirect))
 
 // Уже вошли — сразу уводим.
 if (auth.isAuthenticated.value) {
@@ -54,9 +52,11 @@ async function goOAuth(provider: string) {
   error.value = ''
   try {
     // Внутри произойдёт window.location.href = authorization_url.
+    sessionStorage.setItem(LOGIN_RETURN_KEY, redirectTo.value)
     await auth.startOAuth(provider)
   } catch (e) {
     error.value = humanizeAuthError(e)
+    sessionStorage.removeItem(LOGIN_RETURN_KEY)
     oauthPending.value = ''
   }
 }

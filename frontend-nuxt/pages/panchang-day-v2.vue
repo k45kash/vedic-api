@@ -3,7 +3,11 @@ import type { PositionMode } from '~/composables/useBirthForm'
 import reference from '~content/panchanga.json'
 import tithis from '~content/tithi.json'
 
-useHead({ title: 'Панчанга v2 · Vedic' })
+import { ApiError } from '~/composables/useApi'
+
+definePageMeta({ layout: 'app', middleware: 'auth' })
+useHead({ title: 'Панчанга на день · Vedic' })
+usePageHeader().setPageHeader({ title: 'Панчанга на день' })
 const api = useApi()
 type Interval = {
   dt_start: string; dt_end: string; name?: string; planet?: string; num?: number
@@ -11,7 +15,16 @@ type Interval = {
   is_bhadra?: boolean; is_stop?: boolean; day_night?: string
 }
 type Timeline = { start?: string; end?: string; timezone?: string; rows: Record<string, Interval[]>; warnings: string[] }
-const requested = useRoute().query
+const route = useRoute()
+const requested = route.query
+const auth = useAuth()
+
+function redirectExpiredSession(error: unknown) {
+  if (!(error instanceof ApiError) || error.status !== 401) return false
+  auth.logout()
+  void navigateTo({ path: '/login', query: { redirect: route.fullPath } }, { replace: true })
+  return true
+}
 function coordinate(key: string, fallback: number, limit: number) {
   const input = requested[key]
   const value = typeof input === 'string' && input.trim() ? Number(input) : NaN
@@ -87,8 +100,8 @@ watch([monthOpen, month, () => place.lat, () => place.lon, () => place.tz, mode,
         monthData.value = Object.fromEntries(days.map(item => [item.date, item]))
         monthStatus.value = ''
       }
-    } catch {
-      if (live) monthStatus.value = 'Не удалось рассчитать месяц.'
+    } catch (error) {
+      if (live && !redirectExpiredSession(error)) monthStatus.value = 'Не удалось рассчитать месяц.'
     }
   })
 
@@ -101,7 +114,9 @@ watch(query, async (q, _, cleanup) => {
   try {
     const data = await api.post<Timeline>('/api/panchang/day', q)
     if (live) timeline.value = data
-  } catch (e) { if (live) dayError.value = String(e) }
+  } catch (error) {
+    if (live && !redirectExpiredSession(error)) dayError.value = String(error)
+  }
 }, { immediate: true })
 const dateMs = computed(() => Date.parse(day.value + 'T00:00Z'))
 const windowStart = computed(() => timeline.value?.start ? Date.parse(timeline.value.start) : dateMs.value)
@@ -330,7 +345,7 @@ const karakas = computed(() => {
 </script>
 <template>
   <article class="pd">
-    <header class="heading"><div><h1>Панчанга на день</h1><NuxtLink :to="{ path: '/panchang-day', query: { date: day, time: clock } }">Эталон для сверки</NuxtLink><p>{{ place.city }} · {{ offsetLabel(selected?.offset ?? place.tz) }} · {{ mode === 'apparent' ? 'Видимые положения' : 'Геометрические положения' }}</p></div>
+    <header class="heading"><div><p>{{ place.city }} · {{ offsetLabel(selected?.offset ?? place.tz) }} · {{ mode === 'apparent' ? 'Видимые положения' : 'Геометрические положения' }}</p></div>
       <div class="buttons"><button @click="today">Сегодня</button><button @click="openMonth">На месяц</button><button @click="settings = !settings" :aria-expanded="settings">Место и расчёт</button><button @click="share">Ссылка для сверки</button></div>
     </header>
     <div v-if="shareUrl" class="share">
@@ -447,23 +462,23 @@ const karakas = computed(() => {
   </article>
 </template>
 <style scoped>
-.pd{color:#253948;font:15px/1.45 system-ui,sans-serif}.heading,.buttons,.toolbar,.windows,.prefs{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.heading{justify-content:space-between}.heading h1{font-size:clamp(28px,4vw,43px);letter-spacing:-.045em}.heading p,.detail small{color:#506c71}.heading p,.detail p{margin:.35rem 0}.pd button,.pd input,.pd select{color:inherit;font:inherit}.pd button,.pd input{background:white;border:1px solid #bdcfcf;border-radius:8px;padding:7px 11px}.pd button{cursor:pointer}.pd button:hover,.pd button.chosen{background:#e1f0e9}.buttons button:first-child{background:#166047;color:white}.toolbar{margin:22px 0 12px}.toolbar label{margin-left:auto}.panel{background:white;border:1px solid #d6e0df;border-radius:12px}.prefs,.month{padding:15px;margin-top:12px}.prefs input{max-width:130px}.month{max-width:340px}.monthgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px;text-align:center}.monthgrid button{padding:5px}.scroll{overflow:auto}.scale{min-width:770px;padding:14px 16px}.track{display:grid;grid-template-columns:112px 1fr;align-items:stretch}.track>b{font-size:12px;align-self:center}.axis{display:flex;justify-content:space-between;color:#61767a;font-size:11px}.axis span{width:4.1667%}.rail{height:33px;position:relative;background:repeating-linear-gradient(90deg,#dce4e2 0 1px,transparent 1px 4.16667%);cursor:crosshair}.bar{box-sizing:border-box;position:absolute;top:2px;bottom:2px;border:1px solid white;border-radius:6px;padding:3px;overflow:hidden;white-space:nowrap;color:#263e48;font-size:13px;text-align:center}.bar.stop{border-bottom:3px solid #bd5554}.track:has(.bar small) .rail{height:49px}.bar small{display:block;font-size:10px}.moment{color:#405961}.rail i{position:absolute;top:0;bottom:0;width:2px;background:#13694e;pointer-events:none}.windows{margin:11px 0;color:#465e62;gap:22px}.pd h2{margin:26px 0 10px;font-size:21px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.detail{padding:13px}.detail h3{margin:4px 0;font-size:18px}.detail p{font-size:13px}.positions{display:grid;grid-template-columns:minmax(230px,1fr) 2fr;gap:14px}.positions table{width:100%;min-width:520px;border-collapse:collapse}.positions td,.positions th{padding:7px;text-align:left;border-bottom:1px solid #e0e6e6}.pd [role=alert]{color:#993f32}@media(max-width:720px){.positions{grid-template-columns:1fr}.toolbar label{margin-left:0}.heading{align-items:flex-start}.cards{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}}
+.pd{color:var(--ink);font:15px/1.45 system-ui,sans-serif}.heading,.buttons,.toolbar,.windows,.prefs{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.heading{justify-content:space-between}.heading h1{font-size:clamp(28px,4vw,43px);letter-spacing:-.045em}.heading p,.detail small{color:var(--muted)}.heading p,.detail p{margin:.35rem 0}.pd button,.pd input,.pd select{color:inherit;font:inherit}.pd button,.pd input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 11px}.pd button{cursor:pointer}.pd button:hover,.pd button.chosen{background:var(--accent-soft)}.buttons button:first-child{background:#166047;color:white}.toolbar{margin:22px 0 12px}.toolbar label{margin-left:auto}.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px}.prefs,.month{padding:15px;margin-top:12px}.prefs input{max-width:130px}.month{max-width:340px}.monthgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px;text-align:center}.monthgrid button{padding:5px}.scroll{overflow:auto}.scale{min-width:770px;padding:14px 16px}.track{display:grid;grid-template-columns:112px 1fr;align-items:stretch}.track>b{font-size:12px;align-self:center}.axis{display:flex;justify-content:space-between;color:#61767a;font-size:11px}.axis span{width:4.1667%}.rail{height:33px;position:relative;background:repeating-linear-gradient(90deg,#dce4e2 0 1px,transparent 1px 4.16667%);cursor:crosshair}.bar{box-sizing:border-box;position:absolute;top:2px;bottom:2px;border:1px solid white;border-radius:6px;padding:3px;overflow:hidden;white-space:nowrap;color:#263e48;font-size:13px;text-align:center}.bar.stop{border-bottom:3px solid #bd5554}.track:has(.bar small) .rail{height:49px}.bar small{display:block;font-size:10px}.moment{color:var(--muted)}.rail i{position:absolute;top:0;bottom:0;width:2px;background:#13694e;pointer-events:none}.windows{margin:11px 0;color:var(--muted);gap:22px}.pd h2{margin:26px 0 10px;font-size:21px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.detail{padding:13px}.detail h3{margin:4px 0;font-size:18px}.detail p{font-size:13px}.positions{display:grid;grid-template-columns:minmax(230px,1fr) 2fr;gap:14px}.positions table{width:100%;min-width:520px;border-collapse:collapse}.positions td,.positions th{padding:7px;text-align:left;border-bottom:1px solid #e0e6e6}.pd [role=alert]{color:#993f32}@media(max-width:720px){.positions{grid-template-columns:1fr}.toolbar label{margin-left:0}.heading{align-items:flex-start}.cards{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}}
 
 .share { display: grid; gap: 4px; margin-top: 12px; }
-.overview { padding: 14px; margin-bottom: 14px; background: #f6fbf8; }
+.overview { padding: 14px; margin-bottom: 14px; background: var(--surface-2); }
 .overview h2 { margin: 0 0 10px; }
 .overview dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; margin: 0; }
-.overview dt { font-size: 12px; color: #526c66; }
+.overview dt { font-size: 12px; color: var(--muted); }
 .overview dd { margin: 0; }
 .overview dd:first-of-type { font-weight: 700; }
 .overview dd + dd { font-size: 12px; }
-.next { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 13px; padding-top: 10px; border-top: 1px solid #d6e0df; }
+.next { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--line); }
 .next p { margin: 0; }
 .minute-slider { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .pd input[type="range"] { accent-color: #166047; width: min(100%, 320px); padding: 0; }
 .scale { position: relative; --track-label-width: 112px; }
 .track { grid-template-columns: var(--track-label-width) 1fr; }
-.track > b { position: sticky; left: 0; z-index: 4; background: #fff; padding: 4px; align-self: stretch; display: grid; align-items: center; }
+.track > b { position: sticky; left: 0; z-index: 4; background: var(--surface); padding: 4px; align-self: stretch; display: grid; align-items: center; }
 .marker-layer { position: absolute; inset: 0 16px 0 calc(var(--track-label-width) + 16px); pointer-events: none; z-index: 3; }
 .marker { position: absolute; inset-block: 0; border-left: 2px solid #12674b; }
 .marker span { display: block; padding: 2px 5px; border-radius: 4px; background: #12674b; color: #fff; font-size: 11px; }
@@ -487,7 +502,7 @@ const karakas = computed(() => {
 .axis span { position: absolute; }
 .rail { background-size: calc(100% * 60 / v-bind(dayMinutes)) 100%; background-image: linear-gradient(to right,#dce4e2 1px,transparent 1px); }
 .calculation-note { padding: 12px; margin: 10px 0; }
-.calculation-note summary, .tithi-note summary { color: #166047; cursor: pointer; }
+.calculation-note summary, .tithi-note summary { color: var(--accent-ink); cursor: pointer; }
 .calculation-note dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; max-width: 480px; }
 .calculation-note dd { margin: 0; font-variant-numeric: tabular-nums; }
 .calculation-note p { margin-bottom: 0; }
@@ -495,10 +510,10 @@ const karakas = computed(() => {
 .day-events { margin-bottom: 14px; }
 .day-events summary { cursor: pointer; color: #166047; padding: 12px 14px; }
 .day-events ol { list-style: none; margin: 0; padding: 0 10px 10px; }
-.day-events li { display: flex; align-items: flex-start; gap: 12px; border-top: 1px solid #d6e0df; padding: 8px 4px; }
-.day-events li.upcoming { background: #edf7f2; }
+.day-events li { display: flex; align-items: flex-start; gap: 12px; border-top: 1px solid var(--line); padding: 8px 4px; }
+.day-events li.upcoming { background: var(--accent-soft); }
 .day-events li button { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .day-events li span, .day-events li small { display: block; }
-.day-events li small { color: #166047; }
+.day-events li small { color: var(--accent-ink); }
 .clock-choice { display: block; margin-bottom: 8px; }
 </style>

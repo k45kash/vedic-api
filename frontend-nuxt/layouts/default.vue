@@ -5,26 +5,11 @@ const { isAuthenticated, email: userEmail } = auth
 
 const nav = [
   { href: '/',          label: 'Накшатра'  },
-  { href: '/panchang-day-v2', label: 'Панчанга' },
-  { href: '/panchang-day', label: 'Эталон' },
   { href: '/calendar',  label: 'Календарь' },
   { href: '/sade-sati', label: 'Сади Сати' },
 ]
 
-const panchangaPaths = ['/panchang-day', '/panchang-day-v2']
 const currentPath = computed(() => route.path.replace(/\/$/, '') || '/')
-function navTarget(path: string) {
-  if (!panchangaPaths.includes(path) || !panchangaPaths.includes(currentPath.value)) return path
-
-  const { date, time } = route.query
-  return {
-    path,
-    query: {
-      date: typeof date === 'string' ? date : undefined,
-      time: typeof time === 'string' ? time : undefined,
-    },
-  }
-}
 
 // Профиль подтягиваем один раз при монтировании, если токен есть:
 // нужен email в шапке; на 401 useAuth сам вычистит протухший токен.
@@ -43,7 +28,7 @@ async function onLogout() {
     <nav aria-label="Основная навигация">
       <ul class="public-navigation">
         <li v-for="item in nav" :key="item.href">
-          <NuxtLink :to="navTarget(item.href)" :class="{ active: currentPath === item.href }"
+          <NuxtLink :to="item.href" :class="{ active: currentPath === item.href }"
             :aria-current="currentPath === item.href ? 'page' : undefined">
             {{ item.label }}
           </NuxtLink>

@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from datetime import date, datetime
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,7 @@ from position_mode import PositionMode, calculate_in_mode
 from panchang_day import day_timeline, month_summary
 from auth.db import init_db
 from auth.router import router as auth_router
+from auth.users import current_active_user
 
 
 @asynccontextmanager
@@ -223,13 +224,13 @@ class DayTimelineRequest(CalculationRequest):
             raise HTTPException(422, "Часовой пояс недоступен. Укажите смещение вручную.")
 
 
-@app.post("/api/panchang/day")
+@app.post("/api/panchang/day", dependencies=[Depends(current_active_user)])
 def panchang_day(req: DayTimelineRequest):
     result = calculate_in_mode(req.position_mode, day_timeline, req.day, req.lat, req.lon, req.tz, req.zone())
     return {**result, "position_mode": req.position_mode}
 
 
-@app.post("/api/panchang/month")
+@app.post("/api/panchang/month", dependencies=[Depends(current_active_user)])
 def panchang_month(req: DayTimelineRequest):
     return calculate_in_mode(req.position_mode, month_summary, req.day.replace(day=1),
                              req.lat, req.lon, req.tz, req.zone())

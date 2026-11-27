@@ -1,12 +1,48 @@
+import asyncio
+from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
+
+from auth.users import get_jwt_strategy, get_user_manager
 from main import app
 
-client = TestClient(app)
 place = dict(day="2026-11-27", tz=3, lat=45.0428, lon=41.9734)
 
 
-def test_day_screen_before_sunrise():
+@pytest.fixture
+def client():
+    user = SimpleNamespace(id="panchanga-test", is_active=True)
+
+    class TestUserManager:
+        @staticmethod
+        def parse_id(value):
+            return value
+
+        async def get(self, user_id):
+            assert user_id == user.id
+            return user
+
+    app.dependency_overrides[get_user_manager] = TestUserManager
+    try:
+        token = asyncio.run(get_jwt_strategy().write_token(user))
+        with TestClient(app, headers={"Authorization": f"Bearer {token}"}) as authenticated:
+            yield authenticated
+    finally:
+        del app.dependency_overrides[get_user_manager]
+
+
+def test_panchanga_requires_authentication():
+    with TestClient(app) as guest:
+        for path in ("/api/panchang/day", "/api/panchang/month"):
+            assert guest.post(path, json=place).status_code == 401
+            response = guest.post(path, json=place, headers={"Authorization": "Bearer invalid"})
+            assert response.status_code == 401
+
+place = dict(day="2026-11-27", tz=3, lat=45.0428, lon=41.9734)
+
+
+def test_day_screen_before_sunrise(client):
     rows = client.post("/api/panchang/day", json=place).json()["rows"]
     at = "2026-11-27T03:00:00"
     current = {key: next((i for i in items if i["dt_start"] <= at < i["dt_end"]), None)
@@ -26,7 +62,7 @@ def test_day_screen_before_sunrise():
             assert left["dt_end"] == right["dt_start"]
 
 
-def test_geometric_and_polar_day():
+def test_geometric_and_polar_day(client):
     body = client.post("/api/panchang/day", json=dict(place, position_mode="geometric")).json()
     assert body["position_mode"] == "geometric"
     assert body["rows"]["tithi"][0]["dt_end"] != "2026-11-27T07:19:03"
@@ -34,7 +70,7 @@ def test_geometric_and_polar_day():
     assert polar["warnings"] and polar["rows"]["lagna"] == [] and polar["rows"]["yoga"]
 
 
-def test_month_summary_uses_sunrise_and_local_day():
+def test_month_summary_uses_sunrise_and_local_day(client):
     response = client.post("/api/panchang/month", json=dict(place, day="2026-11-01"))
     assert response.status_code == 200
     days = response.json()
@@ -48,7 +84,7 @@ def test_month_summary_uses_sunrise_and_local_day():
     assert polar[26]["nakshatra"] is None
 
 
-def test_civil_day_tracks_clock_changes():
+def test_civil_day_tracks_clock_changes(client):
     from datetime import datetime
 
     berlin = dict(lat=52.52, lon=13.405, tz=1, use_local_timezone=True)
@@ -67,7 +103,7 @@ def test_civil_day_tracks_clock_changes():
     assert month[24]["nakshatra"]
 
 
-def test_automatic_stavropol_agrees_with_reference():
+def test_automatic_stavropol_agrees_with_reference(client):
     reference = client.post("/api/panchang/day", json=place).json()
     local = client.post("/api/panchang/day", json=dict(place, use_local_timezone=True)).json()
     for key in reference["rows"]:

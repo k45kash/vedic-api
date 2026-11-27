@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LOGIN_RETURN_KEY, safeLoginReturn } from '~/utils/loginRedirect'
 // Приёмник OAuth-возврата. Бэкенд редиректит браузер сюда:
 //   /auth/callback#token=<jwt>&provider=<name>
 //   /auth/callback#error=<текст>
@@ -23,6 +24,8 @@ onMounted(async () => {
   const params = new URLSearchParams(hash)
   const token = params.get('token')
   const err = params.get('error')
+  const returnTo = safeLoginReturn(sessionStorage.getItem(LOGIN_RETURN_KEY))
+  sessionStorage.removeItem(LOGIN_RETURN_KEY)
   provider.value = params.get('provider') || ''
 
   // Сразу вычищаем хэш, чтобы токен не остался в адресной строке и в истории.
@@ -43,7 +46,7 @@ onMounted(async () => {
 
   try {
     await auth.loginWithToken(token)
-    await navigateTo('/dashboard', { replace: true })
+    await navigateTo(returnTo, { replace: true })
   } catch (e) {
     error.value = humanizeAuthError(e)
     busy.value = false
