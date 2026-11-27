@@ -5,6 +5,7 @@ import tithis from '~content/tithi.json'
 
 import { ApiError } from '~/composables/useApi'
 import { nakName, taraFor } from '~/composables/useJyotish'
+import { findTaraWindows, TARA_GOALS } from '~/calculators/tara-windows'
 
 definePageMeta({ layout: 'app', middleware: 'auth' })
 useHead({ title: 'Панчанга на день · Vedic' })
@@ -340,6 +341,44 @@ const abhijitComparison = computed(() => {
   })
 })
 const overlaps = computed(() => abhijitComparison.value.flatMap(item => item.overlaps))
+function isWednesdayAbhijit(interval: Interval) {
+  const start = ms(interval.dt_start)
+  return timeline.value?.rows.vara.some(day =>
+    day.num === 3 && ms(day.dt_start) <= start && start < ms(day.dt_end)
+  ) ?? false
+}
+const hasWednesdayAbhijit = computed(() => abhijitComparison.value.some(({ abhijit }) => isWednesdayAbhijit(abhijit)))
+const goalIndex = ref(0)
+const eventDuration = ref(30)
+const windowLabels = {
+  rahu: 'Действует Раху-кала',
+  bhadra: 'Действует Бхадра',
+  abhijit: 'Действует Абхиджит',
+  wednesday: 'Абхиджит в среду · по курсу не рекомендуется для важных начинаний',
+}
+const windowChoices = computed(() => {
+  const rows = timeline.value?.rows
+  const goal = TARA_GOALS[goalIndex.value]
+  if (!rows?.vara.length || !goal || moonUncertainReason.value === 'boundary') return []
+  const day = { start: windowStart.value, end: windowStart.value + dayMinutes.value * 60000 }
+  const bounds = (interval: Interval) => ({ start: ms(interval.dt_start), end: ms(interval.dt_end) })
+  return findTaraWindows(day, taraTrack.value.map(({ interval, variants }) => ({
+    ...bounds(interval), taras: variants.map(({ tara }) => tara),
+  })), [
+    ...rows.rahu.map(row => ({ ...bounds(row), kind: 'rahu' as const })),
+    ...rows.karana.filter(row => row.is_bhadra).map(row => ({ ...bounds(row), kind: 'bhadra' as const })),
+    ...rows.abhijit.map(row => ({ ...bounds(row), kind: isWednesdayAbhijit(row) ? 'wednesday' as const : 'abhijit' as const })),
+  ], goal, eventDuration.value)
+})
+function windowClock(epoch: number) {
+  const stamp = localStamp(epoch)
+  // Ручной режим использует местные отметки как UTC, автоматический — реальные моменты.
+  const seconds = new Date(epoch).toISOString().slice(17, 19)
+  const time = stamp.slice(11, 16) + (seconds === '00' ? '' : ':' + seconds)
+  const offset = (Date.parse(stamp.slice(0, 16) + 'Z') - Math.floor(epoch / 60000) * 60000) / 3600000
+  const date = stamp.slice(0, 10) === day.value ? '' : stamp.slice(8, 10) + '.' + stamp.slice(5, 7) + ' '
+  return date + time + (dayMinutes.value !== 1440 && zonedFormat.value ? ' · ' + offsetLabel(offset) : '')
+}
 function intervalTimes(interval: Pick<Interval, 'dt_start' | 'dt_end'>) {
   return hhmm(interval.dt_start) + '–' + hhmm(interval.dt_end)
 }
@@ -435,13 +474,49 @@ const karakas = computed(() => {
           <p v-else-if="moonUncertainReason === 'boundary'">Накшатра рождения может зависеть от метода расчёта или точности времени. Результат предварительный. <NuxtLink to="/me">Подробнее в профиле</NuxtLink></p>
           <ul>
             <li v-for="{ janma, tara } in activeTara.variants" :key="janma">
-              <strong>{{ tara.name }}</strong> · {{ tara.short }}
+              <strong>{{ tara.name }}</strong> <span>· {{ tara.pos }}-я от накшатры рождения</span>
               <small>Накшатра рождения · {{ nakName(janma) }}</small>
+              <p v-if="tara.schoolAvoid" class="school-warning">По курсу для {{ tara.pos }}-й позиции важное начинание лучше отложить.</p>
+              <p v-if="tara.n === 1" class="school-warning">Джанма · краткая таблица курса допускает начинания, подробная глава советует осторожность с крупными стартами. В сервисе оценка смешанная.</p>
+              <p v-if="tara.school?.good"><strong>Для каких дел подходит</strong> · {{ tara.school.good }}</p>
+              <p v-if="tara.school?.bad"><strong>Что лучше отложить</strong> · {{ tara.school.bad }}</p>
             </li>
           </ul>
         </template>
         <p v-else>Для выбранного момента нет данных о Тара-бале.</p>
       </section>
+      <details class="panel calculation-note time-picker">
+        <summary>Подобрать время внутри дня</summary>
+        <p v-if="!hasProfile">Для подбора по Тара-бале укажите <NuxtLink to="/me">данные рождения</NuxtLink>.</p>
+        <p v-else-if="birthLoading">Рассчитываем накшатру рождения…</p>
+        <p v-else-if="!timeline.rows.vara.length">Подбор недоступен без расчёта цикла восхода и заката.</p>
+        <p v-else-if="moonUncertainReason === 'boundary'">Накшатра рождения пограничная. Уточните её в <NuxtLink to="/me">профиле</NuxtLink>.</p>
+        <p v-else-if="!taraTrack.length">Нет данных для подбора по Тара-бале.</p>
+        <template v-else>
+          <div class="picker-controls">
+            <label>Цель <select v-model.number="goalIndex">
+              <option v-for="(goal, index) in TARA_GOALS" :key="goal.label" :value="index">{{ goal.label }}</option>
+            </select></label>
+            <label>Длительность, мин <input v-model.number="eventDuration" type="number" min="1" :max="dayMinutes" step="1"></label>
+          </div>
+          <p>Учитываются Тара-бала, Раху-кала, Бхадра и Абхиджит. Окна с предупреждениями идут после остальных.</p>
+          <p v-if="moonUncertainReason === 'time-unknown'">Подходящая для цели тара нужна при каждом возможном варианте накшатры рождения.</p>
+          <p v-if="!Number.isInteger(eventDuration) || eventDuration < 1 || eventDuration > dayMinutes">Укажите целое число минут в пределах выбранных суток.</p>
+          <ul v-else-if="windowChoices.length">
+            <li v-for="choice in windowChoices" :key="choice.start">
+              <button type="button" @click="selectMinute((choice.start - windowStart) / 60000)"
+                :aria-label="'Выбрать начало в ' + windowClock(choice.start)">{{ windowClock(choice.start) }}–{{ windowClock(choice.end) }}</button>
+              <div>
+                <strong>{{ choice.names.join(' / ') }}</strong> · {{ TARA_GOALS[goalIndex].reason }}
+                <p v-for="flag in choice.flags" :key="flag" :class="{ 'school-warning': flag !== 'abhijit' }">{{ windowLabels[flag] }}</p>
+                <p v-if="!choice.flags.length">Вне Раху-калы, Бхадры и Абхиджит.</p>
+                <p v-if="choice.schoolPositions.length" class="school-warning">По курсу лучше отложить важный старт · {{ choice.schoolPositions.join(' / ') }}-я позиция от рождения.</p>
+              </div>
+            </li>
+          </ul>
+          <p v-else>На выбранную дату нет окна, подходящего по Тара-бале для этой цели и длительности.</p>
+        </template>
+      </details>
       <details v-if="dayEvents.length" class="panel day-events">
         <summary>Переходы дня</summary>
         <ol>
@@ -469,8 +544,8 @@ const karakas = computed(() => {
             <b>Тара-бала для вас</b>
             <div class="rail" @click="pick">
               <span v-for="part in taraTrack" :key="part.interval.dt_start" class="bar"
-                :class="{ active: part === activeTara }" :style="part.style"
-                :title="part.variants.map(({ janma, tara }) => nakName(janma) + ' → ' + tara.name).join(' · ')">
+                :class="{ active: part === activeTara, stop: part.variants.some(({ tara }) => tara.schoolAvoid) }" :style="part.style"
+                :title="part.variants.map(({ janma, tara }) => nakName(janma) + ' → ' + tara.name + (tara.schoolAvoid ? ' · ' + tara.pos + '-я от рождения, предупреждение курса' : '')).join(' · ')">
                 {{ part.names }}
               </span>
             </div>
@@ -478,8 +553,9 @@ const karakas = computed(() => {
         </template>
       </div></div>
       <div class="windows"><span v-for="k in ['rahu','abhijit']" :key="k"><template v-for="r in timeline.rows[k]" :key="r.dt_start"><strong>{{ r.name }}</strong> {{ hhmm(r.dt_start) }}–{{ hhmm(r.dt_end) }} </template></span></div>
-      <details v-if="overlaps.length" class="panel calculation-note">
-        <summary>Как пересекаются Абхиджит и Раху-кала</summary>
+      <p v-if="hasWednesdayAbhijit" class="school-warning">Абхиджит в среду · по правилам курса не рекомендуется для важных начинаний.</p>
+      <details v-if="abhijitComparison.length" class="panel calculation-note">
+        <summary>Абхиджит и Раху-кала · метод расчёта и сверка</summary>
         <dl v-for="{ abhijit, overlaps: intersection, outsideRahu } in abhijitComparison" :key="abhijit.dt_start">
           <dt>Полный Абхиджит</dt><dd>{{ intervalTimes(abhijit) }}</dd>
           <dt>Пересечение с Раху-калой</dt>
@@ -487,7 +563,8 @@ const karakas = computed(() => {
           <dt>Абхиджит вне Раху-калы</dt>
           <dd>{{ outsideRahu.map(intervalTimes).join(', ') || 'Нет такого интервала' }}</dd>
         </dl>
-        <p>Время вне Раху-калы показано для сверки. Оценка мухурты зависит от остальных факторов панчанги.</p>
+        <p><strong>Расхождение с курсом.</strong> Курс описывает окно в 48 минут. Здесь Абхиджит занимает 1/15 светового дня, поэтому длительность зависит от даты и места.</p>
+        <p v-if="hasWednesdayAbhijit"><strong>Сверка с коллегами.</strong> При наличии восхода и заката наш расчёт для среды даёт пересечение с Раху-калой во второй половине Абхиджит. Правило, по которому коллеги могут скрывать окно в зависимости от места, уточняется.</p>
       </details>
       <p class="moment">В {{ clock }} · {{ current.lagna?.name || '—' }} на восходе · Мухурта {{ current.muhurta?.name || '—' }} · Хора {{ current.hora?.planet || '—' }}</p>
       <h2>Панчанга в {{ clock }}</h2><div class="cards">
@@ -499,7 +576,7 @@ const karakas = computed(() => {
             <p>{{ description(key,current[key]!) }}</p>
             <details v-if="key === 'tithi' && (current[key]?.num === 3 || current[key]?.num === 18)" class="tithi-note">
               <summary>Как оценена Тритья</summary>
-              <p>В нашем справочнике Тритья растущей Луны (Шукла, № 3) благоприятная. Тритья убывающей Луны (Кришна, № 18) переменная. При сверке сравнивайте номер титхи, пакшу и правило оценки.</p>
+              <p>В нашем справочнике Тритья растущей Луны (Шукла, № 3) благоприятная, а Тритья убывающей Луны (Кришна, № 18) переменная. В контрольном примере коллег № 18 отмечена как благоприятная. Правило коллег уточняется.</p>
             </details>
           </template><p v-else>Интервал не определён</p>
         </section>
@@ -577,4 +654,12 @@ const karakas = computed(() => {
 .personal-tara .tara-context, .personal-tara li small { color: var(--muted); }
 .personal-tara ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
 .personal-tara li small { display: block; }
+.personal-tara li + li { border-top: 1px solid var(--line); padding-top: 8px; }
+.school-warning { color: var(--ink); border-left: 3px solid #b77931; padding-left: 8px; }
+.picker-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; }
+.picker-controls select { max-width: 100%; }
+.picker-controls input { width: 6em; }
+.time-picker ul { list-style: none; padding: 0; margin: 8px 0 0; }
+.time-picker li { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.time-picker li p { margin: 4px 0 0; }
 </style>

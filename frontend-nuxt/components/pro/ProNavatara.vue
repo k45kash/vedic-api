@@ -104,7 +104,7 @@ const todayCell = computed(() =>
               <div v-if="isJanma(c) || isToday(c) || c.schoolAvoid" class="nav9__marks">
                 <span v-if="isJanma(c)" class="nav9__mark nav9__mark--janma">Джанма</span>
                 <span v-if="isToday(c)" class="nav9__mark nav9__mark--today">Луна сегодня</span>
-                <span v-if="c.schoolAvoid" class="nav9__mark nav9__mark--avoid">27-я</span>
+                <span v-if="c.schoolAvoid" class="nav9__mark nav9__mark--avoid" title="Предупреждение курса для важных начинаний">{{ c.pos }}-я</span>
               </div>
             </td>
           </tr>

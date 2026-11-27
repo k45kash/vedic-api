@@ -11,6 +11,10 @@ import { nakName, rulerOf } from './nakshatra'
 
 export type TaraStrength = 'full' | 'partial' | 'mild'
 
+function isSchoolAvoidPosition(position: number): boolean {
+  return position === 22 || position === 27
+}
+
 export interface TaraResult {
   n: number               // номер тары 1..9
   name: string            // Джанма, Сампат, Випат…
@@ -20,7 +24,7 @@ export interface TaraResult {
   pos: number             // 1..27 — позиция накшатры дня от Джанмы
   group: 1 | 2 | 3        // Джанмаркша (1–9) / Кармаркша (10–18) / Адханаркша (19–27)
   strength: TaraStrength  // сила негатива: full — весь день, partial — ~8ч, mild — почти нейтрально
-  schoolAvoid: boolean    // правило школы: 27-я накшатра от Джанмы — избегать
+  schoolAvoid: boolean    // правило школы: позиции 22 и 27 от Джанмы
   school?: (typeof TARA_SCHOOL)[keyof typeof TARA_SCHOOL] // детали школы (theme, energy, good, bad…)
 }
 
@@ -46,7 +50,7 @@ export function taraFor(janmaNo: number, dayNo: number): TaraResult {
     pos,
     group,
     strength,
-    schoolAvoid: pos === 27,
+    schoolAvoid: isSchoolAvoidPosition(pos),
     school: (TARA_SCHOOL as Record<string, any>)[String(base.n)],
   }
 }
@@ -86,7 +90,7 @@ export function taraChakra(janmaNo: number): TaraChakraCell[] {
       ruler: rulerOf(nakNo),
       dana: TARA_DANA[t],
       group: (pos <= 9 ? 1 : pos <= 18 ? 2 : 3) as 1 | 2 | 3,
-      schoolAvoid: pos === 27,
+      schoolAvoid: isSchoolAvoidPosition(pos),
     })
   }
   return cells

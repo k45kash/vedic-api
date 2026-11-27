@@ -151,6 +151,9 @@ export function scoreEvent(input: EventScoreInput): EventScoreResult | null {
     } else {
       lines.push({ sign: '~', weight: 0, text: `Тара-бала: ${t.n}-я (${t.name}) — смешанная` })
     }
+    if (t.schoolAvoid) {
+      lines.push({ sign: '~', weight: 0, text: `Тара-бала: ${t.pos}-я позиция от рождения. По курсу важное начинание лучше отложить.` })
+    }
   }
 
   // 3. День недели
